@@ -35,6 +35,7 @@ def main(_config, _run):
                           'data_splits':_config['data_splits']})
     model.hparams['dataset_params']['precomputed_embeddings'] = _config['precomputed_embeddings']
     model.hparams['dataset_params']['img_batch_size'] = _config['dataset_params']['img_batch_size']
+    model.hparams['dataset_params']['joint_img_batch_size'] = _config['dataset_params']['joint_img_batch_size']
 
     # Get output MOT results files
     test_dataset = model.test_dataset()

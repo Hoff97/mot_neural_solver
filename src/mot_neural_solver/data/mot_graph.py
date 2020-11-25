@@ -6,7 +6,7 @@ import numpy as np
 from mot_neural_solver.data.augmentation import MOTGraphAugmentor
 
 from mot_neural_solver.utils.graph import get_time_valid_conn_ixs, get_knn_mask, compute_edge_feats_dict
-from mot_neural_solver.utils.rgb import load_embeddings_from_imgs, load_precomputed_embeddings
+from mot_neural_solver.utils.rgb import load_embeddings_from_imgs, load_precomputed_embeddings, load_joints_imgs
 from torch_scatter import scatter_min
 from torch_geometric.data import Data
 
@@ -174,6 +174,9 @@ class MOTGraph(object):
 
         return reid_embeds, node_feats
 
+    def _get_joints(self):
+        return load_joints_imgs(self.graph_df, self.dataset_params, self.seq_info_dict, self.inference_mode)
+
     def _get_edge_ixs(self, reid_embeddings):
         """
         Constructs graph edges by taking pairs of nodes with valid time connections (not in same frame, not too far
@@ -259,6 +262,9 @@ class MOTGraph(object):
         """
         # Load Appearance Data
         reid_embeddings, node_feats = self._load_appearance_data()
+
+        # TODO: We have to incorporate the detected joints into the graph somehow
+        self._get_joints()
 
         # Determine graph connectivity (i.e. edges) and compute edge features
         edge_ixs, edge_feats_dict = self._get_edge_ixs(reid_embeddings)

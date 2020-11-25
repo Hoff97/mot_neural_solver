@@ -11,6 +11,8 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 
+from torchvision.models.detection import keypointrcnn_resnet50_fpn
+
 class BoundingBoxDataset(Dataset):
     """
     Class used to process detections. Given a DataFrame (det_df) with detections of a MOT sequence, it returns
@@ -66,6 +68,39 @@ class BoundingBoxDataset(Dataset):
         else:
             return bb_img
 
+class FrameDataset(Dataset):
+    """
+    Class used to get image frames d
+    """
+    def __init__(self, det_df, seq_info_dict):
+        self.det_df = det_df
+        self.seq_info_dict = seq_info_dict
+        self.transforms=Compose([ToTensor()])
+
+        # Initialize two variables containing the path and img of the frame that is being loaded to avoid loading multiple
+        # times for boxes in the same image
+        self.curr_img = None
+        self.curr_img_path = None
+
+    def __len__(self):
+        return self.det_df.shape[0]
+
+    def __getitem__(self, ix):
+        row = self.det_df.iloc[ix]
+
+        # Load this bounding box' frame img, in case we haven't done it yet
+        if row['frame_path'] != self.curr_img_path:
+            self.curr_img = imread(row['frame_path'])
+            self.curr_img_path = row['frame_path']
+
+        frame_img = self.curr_img
+
+        frame_img = Image.fromarray(frame_img)
+        if self.transforms is not None:
+            frame_img = self.transforms(frame_img)
+
+        return frame_img
+
 def load_embeddings_from_imgs(det_df, dataset_params, seq_info_dict, cnn_model, return_imgs = False, use_cuda=True):
     """
     Computes embeddings for each detection in det_df with a CNN.
@@ -102,6 +137,32 @@ def load_embeddings_from_imgs(det_df, dataset_params, seq_info_dict, cnn_model, 
     reid_embeds = torch.cat(reid_embeds, dim=0)
 
     return bb_imgs, node_embeds, reid_embeds
+
+def load_joints_imgs(det_df, dataset_params, seq_info_dict, use_cuda=True):
+    """
+    Computes embeddings for each detection in det_df with a CNN.
+    Args:
+        det_df: pd.DataFrame with detection coordinates
+        seq_info_dict: dict with sequence meta info (we need frame dims)
+
+    Returns:
+        (bb_imgs for each det or [], torch.Tensor with shape (num_detects, node_embeddings_dim), torch.Tensor with shape (num_detects, reidembeddings_dim))
+
+    """
+    device = torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")
+
+    ds = FrameDataset(det_df, seq_info_dict = seq_info_dict)
+    loader = DataLoader(ds, batch_size=dataset_params['joint_img_batch_size'], pin_memory=True, num_workers=0)
+
+    model = keypointrcnn_resnet50_fpn(pretrained=True).eval().cuda()
+
+    with torch.no_grad():
+        for frames in loader:
+            result = model([frames[0].cuda()])
+            # TODO: Aggregate and return detected joints
+            print("yay")
+
+    return None
 
 def load_precomputed_embeddings(det_df, seq_info_dict, embeddings_dir, use_cuda):
     """
