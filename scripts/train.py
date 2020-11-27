@@ -49,7 +49,6 @@ def cfg(cross_val_split, eval_params, dataset_params, graph_model_params, data_s
 
 @ex.automain
 def main(_config, _run):
-
     sacred.commands.print_config(_run)
     make_deterministic(12345)
 

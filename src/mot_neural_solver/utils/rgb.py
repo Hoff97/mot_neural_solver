@@ -12,6 +12,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 
 from torchvision.models.detection import keypointrcnn_resnet50_fpn
+from mot_neural_solver.models.keypointonly_rcnn import keypointonlyrcnn_resnet50_fpn
 
 class BoundingBoxDataset(Dataset):
     """
@@ -82,24 +83,38 @@ class FrameDataset(Dataset):
         self.curr_img = None
         self.curr_img_path = None
 
+        self.frames = self.det_df.frame_path.unique()
+
     def __len__(self):
-        return self.det_df.shape[0]
+        return len(self.frames)
 
     def __getitem__(self, ix):
-        row = self.det_df.iloc[ix]
+        """Gets a frame and the bounding boxes
+        The BB-Boxes is returned as a np array with shape [N,4]
+        where the columns are x1, y1, x2, y2
+        """
+        frame_path = self.frames[ix]
 
         # Load this bounding box' frame img, in case we haven't done it yet
-        if row['frame_path'] != self.curr_img_path:
-            self.curr_img = imread(row['frame_path'])
-            self.curr_img_path = row['frame_path']
+        if frame_path != self.curr_img_path:
+            self.curr_img = imread(frame_path)
+            self.curr_img_path = frame_path
 
         frame_img = self.curr_img
-
         frame_img = Image.fromarray(frame_img)
         if self.transforms is not None:
             frame_img = self.transforms(frame_img)
 
-        return frame_img
+        detections = self.det_df.loc[self.det_df['frame_path'] == frame_path]
+
+        bounding_boxes = np.zeros((len(detections),4))
+
+        bounding_boxes[:, 0] = detections.bb_left
+        bounding_boxes[:, 1] = detections.bb_top
+        bounding_boxes[:, 2] = detections.bb_right
+        bounding_boxes[:, 3] = detections.bb_bot
+
+        return frame_img, bounding_boxes
 
 def load_embeddings_from_imgs(det_df, dataset_params, seq_info_dict, cnn_model, return_imgs = False, use_cuda=True):
     """
@@ -154,11 +169,14 @@ def load_joints_imgs(det_df, dataset_params, seq_info_dict, use_cuda=True):
     ds = FrameDataset(det_df, seq_info_dict = seq_info_dict)
     loader = DataLoader(ds, batch_size=dataset_params['joint_img_batch_size'], pin_memory=True, num_workers=0)
 
-    model = keypointrcnn_resnet50_fpn(pretrained=True).eval().cuda()
+    #model = keypointrcnn_resnet50_fpn(pretrained=True).eval().cuda()
+    model = keypointonlyrcnn_resnet50_fpn(pretrained=True).eval().cuda()
 
     with torch.no_grad():
-        for frames in loader:
-            result = model([frames[0].cuda()])
+        for frame, bb_boxes in loader:
+            # This assumes that joint_img_batch_size is 1
+            result = model([frame[0].cuda()], [bb_boxes[0].float().cuda()])
+            # TODO: Check calulated keypoint detections
             # TODO: Aggregate and return detected joints
             print("yay")
 
