@@ -6,6 +6,7 @@ from collections import OrderedDict
 from torch.jit.annotations import Tuple, List, Dict, Optional
 import warnings
 from torchvision.models.detection.roi_heads import keypointrcnn_inference
+from torchvision.models.detection.transform import resize_keypoints
 
 class KeypointOnlyRCNN(KeypointRCNN):
     def forward(self, images, bounding_boxes):
@@ -25,10 +26,9 @@ class KeypointOnlyRCNN(KeypointRCNN):
 
         keypoints_probs, kp_scores = self.get_joints(features, bounding_boxes, image_shapes)
 
-        # keypoints = resize_keypoints(keypoints, im_s, o_im_s)
-        # detections = self.transform.postprocess(detections, images.image_sizes, original_image_sizes)
+        keypoints = resize_keypoints(keypoints_probs[0], image_shapes[0], original_image_sizes[0])
 
-        return keypoints_probs, kp_scores
+        return keypoints
 
     def get_joints(self, features, keypoint_proposals, image_shapes):
         keypoint_features = self.roi_heads.keypoint_roi_pool(features, keypoint_proposals, image_shapes)

@@ -167,7 +167,7 @@ def load_joints_imgs(det_df, dataset_params, seq_info_dict, use_cuda=True):
     device = torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")
 
     ds = FrameDataset(det_df, seq_info_dict = seq_info_dict)
-    loader = DataLoader(ds, batch_size=dataset_params['joint_img_batch_size'], pin_memory=True, num_workers=0)
+    loader = DataLoader(ds, batch_size=1, pin_memory=True, num_workers=0)
 
     #model = keypointrcnn_resnet50_fpn(pretrained=True).eval().cuda()
     model = keypointonlyrcnn_resnet50_fpn(pretrained=True).eval().cuda()
@@ -175,7 +175,7 @@ def load_joints_imgs(det_df, dataset_params, seq_info_dict, use_cuda=True):
     with torch.no_grad():
         for frame, bb_boxes in loader:
             # This assumes that joint_img_batch_size is 1
-            result = model([frame[0].cuda()], [bb_boxes[0].float().cuda()])
+            keypoints = model([frame[0].cuda()], [bb_boxes[0].float().cuda()])
             # TODO: Check calulated keypoint detections
             # TODO: Aggregate and return detected joints
             print("yay")
