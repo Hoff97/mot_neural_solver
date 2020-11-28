@@ -1,0 +1,12 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Train",
+            "type": "python",
+            "request": "launch",
+            "program": "scripts/train.py",
+            "console": "integratedTerminal"
+        }
+    ]
+}
