@@ -3,8 +3,7 @@ from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
 from torchvision.models.utils import load_state_dict_from_url
 import torch
 from collections import OrderedDict
-from torch.jit.annotations import Tuple, List, Dict, Optional
-import warnings
+from torch.jit.annotations import Tuple, List
 from torchvision.models.detection.roi_heads import keypointrcnn_inference
 from torchvision.models.detection.transform import resize_keypoints
 
@@ -16,7 +15,8 @@ class KeypointOnlyRCNN(KeypointRCNN):
             assert len(val) == 2
             original_image_sizes.append((val[0], val[1]))
 
-        images, _ = self.transform(images)
+        images, bounding_boxes = self.transform(images, [{"boxes": bounding_boxes[0]}])
+        bounding_boxes = [bounding_boxes[0]["boxes"]]
         features = self.backbone(images.tensors)
 
         if isinstance(features, torch.Tensor):

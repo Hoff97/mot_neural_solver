@@ -14,6 +14,11 @@ from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 from torchvision.models.detection import keypointrcnn_resnet50_fpn
 from mot_neural_solver.models.keypointonly_rcnn import keypointonlyrcnn_resnet50_fpn
 
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from PIL import Image
+import numpy as np
+
 class BoundingBoxDataset(Dataset):
     """
     Class used to process detections. Given a DataFrame (det_df) with detections of a MOT sequence, it returns
@@ -176,11 +181,34 @@ def load_joints_imgs(det_df, dataset_params, seq_info_dict, use_cuda=True):
         for frame, bb_boxes in loader:
             # This assumes that joint_img_batch_size is 1
             keypoints = model([frame[0].cuda()], [bb_boxes[0].float().cuda()])
-            # TODO: Check calulated keypoint detections
             # TODO: Aggregate and return detected joints
-            print("yay")
+            plot_img_with_bb(frame[0].numpy(), bb_boxes[0].numpy(), keypoints.cpu().numpy())
 
     return None
+
+def plot_img_with_bb(img: np.ndarray, bb_boxes: np.ndarray, keypoints: np.ndarray):
+    img = (img*255).astype(np.uint8)
+    img = img.transpose((1,2,0))
+
+    fig,ax = plt.subplots(1)
+    ax.imshow(img)
+
+    colors=['b','g','r','c','m','y']
+
+    for i in range(bb_boxes.shape[0]):
+        bb_box = bb_boxes[i]
+        color = colors[i % len(colors)]
+        # Create a Rectangle patch
+        rect = patches.Rectangle((bb_box[0], bb_box[1]),bb_box[2]-bb_box[0],bb_box[3]-bb_box[1],linewidth=1,edgecolor=color,facecolor='none')
+        ax.add_patch(rect)
+
+        kps = keypoints[i]
+        for j in range(kps.shape[0]):
+            kp = kps[j]
+            circle = plt.Circle((kp[0], kp[1]), 5, color=color)
+            ax.add_artist(circle)
+
+    plt.savefig('test.png')
 
 def load_precomputed_embeddings(det_df, seq_info_dict, embeddings_dir, use_cuda):
     """
