@@ -34,8 +34,9 @@ def main(_config, _run):
     model.hparams.update({'eval_params':_config['eval_params'],
                           'data_splits':_config['data_splits']})
     model.hparams['dataset_params']['precomputed_embeddings'] = _config['precomputed_embeddings']
+    model.hparams['dataset_params']['precomputed_joints'] = _config['precomputed_joints']
     model.hparams['dataset_params']['img_batch_size'] = _config['dataset_params']['img_batch_size']
-    model.hparams['dataset_params']['joint_img_batch_size'] = _config['dataset_params']['joint_img_batch_size']
+    model.hparams['dataset_params']['visualize_joint_detections'] = _config['dataset_params']['visualize_joint_detections']
 
     # Get output MOT results files
     test_dataset = model.test_dataset()

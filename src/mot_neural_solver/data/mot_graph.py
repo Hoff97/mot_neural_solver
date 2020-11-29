@@ -6,7 +6,7 @@ import numpy as np
 from mot_neural_solver.data.augmentation import MOTGraphAugmentor
 
 from mot_neural_solver.utils.graph import get_time_valid_conn_ixs, get_knn_mask, compute_edge_feats_dict
-from mot_neural_solver.utils.rgb import load_embeddings_from_imgs, load_precomputed_embeddings, load_joints_imgs
+from mot_neural_solver.utils.rgb import load_embeddings_from_imgs, load_precomputed_embeddings, load_joints_from_imgs, load_precomputed_joints
 from torch_scatter import scatter_min
 from torch_geometric.data import Data
 
@@ -175,7 +175,10 @@ class MOTGraph(object):
         return reid_embeds, node_feats
 
     def _get_joints(self):
-        return load_joints_imgs(self.graph_df, self.dataset_params, self.seq_info_dict, self.inference_mode)
+        if self.inference_mode and not self.dataset_params['precomputed_embeddings']:
+            return load_joints_from_imgs(self.graph_df, self.dataset_params, self.seq_info_dict, self.inference_mode)
+        else:
+            return load_precomputed_joints(self.graph_df, self.seq_info_dict, self.dataset_params['joints_dir'], self.inference_mode)
 
     def _get_edge_ixs(self, reid_embeddings):
         """

@@ -28,6 +28,8 @@ def cfg(cross_val_split, eval_params, dataset_params, graph_model_params, data_s
     # Training requires the use of precomputed embeddings
     assert dataset_params['precomputed_embeddings'], "Training without precomp. embeddings is not supp"
 
+    assert dataset_params['precomputed_joints'], "Training without precomp. joint detections is not supported"
+
     # Only use tracktor for postprocessing if tracktor was used for preprocessing
     if 'tracktor' not in dataset_params['det_file_name']:
         eval_params['add_tracktor_detects'] = False

@@ -28,7 +28,7 @@ from lapsolver import solve_dense
 from mot_neural_solver.data.seq_processing.MOTCha_loader import get_mot_det_df, get_mot_det_df_from_gt
 from mot_neural_solver.data.seq_processing.MOT15_loader import get_mot15_det_df, get_mot15_det_df_from_gt
 from mot_neural_solver.utils.iou import iou
-from mot_neural_solver.utils.rgb import BoundingBoxDataset
+from mot_neural_solver.utils.rgb import BoundingBoxDataset, FrameDataset, plot_img_with_bb
 
 import os
 import os.path as osp
@@ -37,6 +37,10 @@ import shutil
 
 import torch
 from torch.utils.data import DataLoader
+
+from mot_neural_solver.models.keypointonly_rcnn import keypointonlyrcnn_resnet50_fpn
+
+from tqdm import tqdm
 
 ##########################################################
 # Definition of available Sequences
@@ -337,6 +341,51 @@ class MOTSeqProcessor:
             #print("Finished storing embeddings")
         print("Finished computing and storing embeddings")
 
+    def _store_joints(self):
+        if not hasattr(self, 'det_df'):
+            self._get_det_df()
+        assert self.dataset_params['joints_dir']
+
+        # Create dirs to store embeddings
+        joints_path = osp.join(self.det_df.seq_info_dict['seq_path'], 'processed_data/joints',
+                                   self.det_df.seq_info_dict['det_file_name'], self.dataset_params['joints_dir'])
+
+        if osp.exists(joints_path):
+            print("Found existing stored joint detectiond. Deleting them and replacing them for new ones")
+            shutil.rmtree(joints_path)
+
+        os.makedirs(joints_path)
+
+        print(f"Computing joints for {len(self.det_df.frame.unique())} frames")
+
+        ds = FrameDataset(self.det_df, seq_info_dict = self.det_df.seq_info_dict)
+        loader = DataLoader(ds, batch_size=1, pin_memory=True, num_workers=0)
+
+        model = keypointonlyrcnn_resnet50_fpn(pretrained=True).eval().cuda()
+
+        with torch.no_grad():
+            for frame, bb_boxes, frame_path, frame_ix in tqdm(loader):
+                keypoints = model([frame[0].cuda()], [bb_boxes[0].float().cuda()])
+                keypoints = keypoints.cpu()
+
+                frame_joints_path = osp.join(joints_path, f"{frame_ix.item()}.pt")
+
+                torch.save(keypoints, frame_joints_path)
+
+                if self.dataset_params["visualize_joint_detections"]:
+                    dir_name = os.path.dirname(frame_path[0])
+                    base_name = os.path.basename(frame_path[0])
+
+                    directory = os.path.join(dir_name, "joints")
+                    save_path = os.path.join(directory, base_name)
+                    if not os.path.exists(directory):
+                        os.makedirs(directory)
+
+                    plot_img_with_bb(frame[0].numpy(), bb_boxes[0].numpy(),
+                                     keypoints.cpu().numpy(), save_path)
+
+        print("Finished computing and storing joint detections")
+
     def process_detections(self):
         # See class header
         self._get_det_df()
@@ -347,6 +396,9 @@ class MOTSeqProcessor:
             self._store_embeddings()
 
         return self.det_df
+
+    def process_joints(self):
+        self._store_joints()
 
     def load_or_process_detections(self):
         """
@@ -361,6 +413,9 @@ class MOTSeqProcessor:
         # If loading precomputed embeddings, check if embeddings have already been stored (otherwise, we need to process dets again)
         node_embeds_path = osp.join(seq_path, 'processed_data/embeddings', det_file_to_use, self.dataset_params['node_embeddings_dir'])
         reid_embeds_path = osp.join(seq_path, 'processed_data/embeddings', det_file_to_use, self.dataset_params['reid_embeddings_dir'])
+
+        joints_path = osp.join(seq_path, 'processed_data/joints', det_file_to_use, self.dataset_params['joints_dir'])
+
         try:
             num_frames = len(pd.read_pickle(seq_det_df_path)['frame'].unique())
             processed_dets_exist = True
@@ -379,6 +434,12 @@ class MOTSeqProcessor:
         else:
             print(f'Detections for sequence {self.seq_name} need to be processed. Starting processing')
             seq_det_df = self.process_detections()
+
+        joints_ok = osp.exists(joints_path) and len(os.listdir(joints_path)) == num_frames
+        if not joints_ok:
+            self.process_joints()
+        else:
+            print(f"Loading processed joints for sequence {self.seq_name} from {joints_path}")
 
         seq_det_df.seq_info_dict['seq_path'] = seq_path
 

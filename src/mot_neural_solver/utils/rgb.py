@@ -18,6 +18,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from PIL import Image
 import numpy as np
+import os
+from tqdm import tqdm
 
 class BoundingBoxDataset(Dataset):
     """
@@ -119,7 +121,7 @@ class FrameDataset(Dataset):
         bounding_boxes[:, 2] = detections.bb_right
         bounding_boxes[:, 3] = detections.bb_bot
 
-        return frame_img, bounding_boxes
+        return frame_img, bounding_boxes, frame_path, detections.frame.unique()[0]
 
 def load_embeddings_from_imgs(det_df, dataset_params, seq_info_dict, cnn_model, return_imgs = False, use_cuda=True):
     """
@@ -158,7 +160,7 @@ def load_embeddings_from_imgs(det_df, dataset_params, seq_info_dict, cnn_model, 
 
     return bb_imgs, node_embeds, reid_embeds
 
-def load_joints_imgs(det_df, dataset_params, seq_info_dict, use_cuda=True):
+def load_joints_from_imgs(det_df, dataset_params, seq_info_dict, use_cuda=True):
     """
     Computes embeddings for each detection in det_df with a CNN.
     Args:
@@ -169,24 +171,32 @@ def load_joints_imgs(det_df, dataset_params, seq_info_dict, use_cuda=True):
         (bb_imgs for each det or [], torch.Tensor with shape (num_detects, node_embeddings_dim), torch.Tensor with shape (num_detects, reidembeddings_dim))
 
     """
-    device = torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")
 
     ds = FrameDataset(det_df, seq_info_dict = seq_info_dict)
     loader = DataLoader(ds, batch_size=1, pin_memory=True, num_workers=0)
 
-    #model = keypointrcnn_resnet50_fpn(pretrained=True).eval().cuda()
     model = keypointonlyrcnn_resnet50_fpn(pretrained=True).eval().cuda()
 
     with torch.no_grad():
-        for frame, bb_boxes in loader:
+        for frame, bb_boxes, frame_path, frame_ix in tqdm(loader):
             # This assumes that joint_img_batch_size is 1
             keypoints = model([frame[0].cuda()], [bb_boxes[0].float().cuda()])
             # TODO: Aggregate and return detected joints
-            plot_img_with_bb(frame[0].numpy(), bb_boxes[0].numpy(), keypoints.cpu().numpy())
+            if dataset_params["visualize_joint_detections"]:
+                dir_name = os.path.dirname(frame_path[0])
+                base_name = os.path.basename(frame_path[0])
+
+                directory = os.path.join(dir_name, "joints")
+                save_path = os.path.join(directory, base_name)
+                if not os.path.exists(directory):
+                    os.makedirs(directory)
+
+                plot_img_with_bb(frame[0].numpy(), bb_boxes[0].numpy(),
+                                 keypoints.cpu().numpy(), save_path)
 
     return None
 
-def plot_img_with_bb(img: np.ndarray, bb_boxes: np.ndarray, keypoints: np.ndarray):
+def plot_img_with_bb(img: np.ndarray, bb_boxes: np.ndarray, keypoints: np.ndarray, save_path: str):
     img = (img*255).astype(np.uint8)
     img = img.transpose((1,2,0))
 
@@ -208,7 +218,8 @@ def plot_img_with_bb(img: np.ndarray, bb_boxes: np.ndarray, keypoints: np.ndarra
             circle = plt.Circle((kp[0], kp[1]), 5, color=color)
             ax.add_artist(circle)
 
-    plt.savefig('test.png')
+    plt.savefig(save_path)
+    plt.close('all')
 
 def load_precomputed_embeddings(det_df, seq_info_dict, embeddings_dir, use_cuda):
     """
@@ -240,3 +251,12 @@ def load_precomputed_embeddings(det_df, seq_info_dict, embeddings_dir, use_cuda)
     embeddings = embeddings[:, 1:]  # Get rid of the detection index
 
     return embeddings.to(torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu"))
+
+def load_precomputed_joints(det_df, seq_info_dict, joints_dir, use_cuda):
+    joints_path = osp.join(seq_info_dict['seq_path'], 'processed_data', 'joints', seq_info_dict['det_file_name'],
+                               joints_dir)
+    frame_num = det_df.frame.unique()[0]
+    joints = torch.load(osp.join(joints_path, f"{frame_num}.pt"))
+    # TODO: Drop joints of BB not present in det_df?
+
+    return joints.to(torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu"))
