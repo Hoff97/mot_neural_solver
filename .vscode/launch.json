@@ -6,7 +6,8 @@
             "type": "python",
             "request": "launch",
             "program": "scripts/train.py",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "justMyCode": false
         }
     ]
 }
