@@ -121,7 +121,9 @@ class FrameDataset(Dataset):
         bounding_boxes[:, 2] = detections.bb_right
         bounding_boxes[:, 3] = detections.bb_bot
 
-        return frame_img, bounding_boxes, frame_path, detections.frame.unique()[0]
+        ids = np.array(detections.id.array)
+
+        return frame_img, bounding_boxes, frame_path, detections.frame.unique()[0], ids
 
 def load_embeddings_from_imgs(det_df, dataset_params, seq_info_dict, cnn_model, return_imgs = False, use_cuda=True):
     """
@@ -178,25 +180,15 @@ def load_joints_from_imgs(det_df, dataset_params, seq_info_dict, use_cuda=True):
     model = keypointonlyrcnn_resnet50_fpn(pretrained=True).eval().cuda()
 
     with torch.no_grad():
-        for frame, bb_boxes, frame_path, frame_ix in tqdm(loader):
+        for frame, bb_boxes, frame_path, _, ids in tqdm(loader):
             # This assumes that joint_img_batch_size is 1
-            keypoints = model([frame[0].cuda()], [bb_boxes[0].float().cuda()])
+            keypoints, kp_scores = model([frame[0].cuda()], [bb_boxes[0].float().cuda()])
             # TODO: Aggregate and return detected joints
-            if dataset_params["visualize_joint_detections"]:
-                dir_name = os.path.dirname(frame_path[0])
-                base_name = os.path.basename(frame_path[0])
-
-                directory = os.path.join(dir_name, "joints")
-                save_path = os.path.join(directory, base_name)
-                if not os.path.exists(directory):
-                    os.makedirs(directory)
-
-                plot_img_with_bb(frame[0].numpy(), bb_boxes[0].numpy(),
-                                 keypoints.cpu().numpy(), save_path)
 
     return None
 
-def plot_img_with_bb(img: np.ndarray, bb_boxes: np.ndarray, keypoints: np.ndarray, save_path: str):
+def plot_img_with_bb(img: np.ndarray, bb_boxes: np.ndarray,
+                     keypoints: np.ndarray, ids:np.ndarray, save_path: str):
     img = (img*255).astype(np.uint8)
     img = img.transpose((1,2,0))
 
@@ -207,7 +199,7 @@ def plot_img_with_bb(img: np.ndarray, bb_boxes: np.ndarray, keypoints: np.ndarra
 
     for i in range(bb_boxes.shape[0]):
         bb_box = bb_boxes[i]
-        color = colors[i % len(colors)]
+        color = colors[ids[i] % len(colors)]
         # Create a Rectangle patch
         rect = patches.Rectangle((bb_box[0], bb_box[1]),bb_box[2]-bb_box[0],bb_box[3]-bb_box[1],linewidth=1,edgecolor=color,facecolor='none')
         ax.add_patch(rect)
@@ -255,8 +247,12 @@ def load_precomputed_embeddings(det_df, seq_info_dict, embeddings_dir, use_cuda)
 def load_precomputed_joints(det_df, seq_info_dict, joints_dir, use_cuda):
     joints_path = osp.join(seq_info_dict['seq_path'], 'processed_data', 'joints', seq_info_dict['det_file_name'],
                                joints_dir)
-    frame_num = det_df.frame.unique()[0]
-    joints = torch.load(osp.join(joints_path, f"{frame_num}.pt"))
+    frames = sorted(det_df.frame.unique())
+    joints = [torch.load(osp.join(joints_path, f"{frame}.pt")) for frame in frames]
+    joints = torch.cat(joints, dim=0)
+
+    # ixs_to_drop = list(set(embeddings[:, 0].int().numpy()) - set(det_df['detection_id']))
     # TODO: Drop joints of BB not present in det_df?
+    # TODO: There are probably multiple frames in det_df, so we have to load all of them
 
     return joints.to(torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu"))

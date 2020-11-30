@@ -364,13 +364,19 @@ class MOTSeqProcessor:
         model = keypointonlyrcnn_resnet50_fpn(pretrained=True).eval().cuda()
 
         with torch.no_grad():
-            for frame, bb_boxes, frame_path, frame_ix in tqdm(loader):
-                keypoints = model([frame[0].cuda()], [bb_boxes[0].float().cuda()])
-                keypoints = keypoints.cpu()
+            for frame, bb_boxes, frame_path, frame_ix, ids in tqdm(loader):
+                keypoints, kp_scores = model([frame[0].cuda()], [bb_boxes[0].float().cuda()])
+                keypoints, kp_scores = keypoints.cpu(), kp_scores.cpu()
 
                 frame_joints_path = osp.join(joints_path, f"{frame_ix.item()}.pt")
 
-                torch.save(keypoints, frame_joints_path)
+                num_boxes = keypoints.shape[0]
+                result = np.zeros((num_boxes, 17, 4))
+                result[:, :, 1:3] = keypoints[:, :, :2]
+                result[:, :, 3] = kp_scores
+                result[:, :, 0] = ids[0].reshape((-1, 1))
+
+                torch.save(result, frame_joints_path)
 
                 if self.dataset_params["visualize_joint_detections"]:
                     dir_name = os.path.dirname(frame_path[0])
@@ -382,7 +388,7 @@ class MOTSeqProcessor:
                         os.makedirs(directory)
 
                     plot_img_with_bb(frame[0].numpy(), bb_boxes[0].numpy(),
-                                     keypoints.cpu().numpy(), save_path)
+                                     keypoints.cpu().numpy(), ids[0].numpy(), save_path)
 
         print("Finished computing and storing joint detections")
 
@@ -436,7 +442,7 @@ class MOTSeqProcessor:
             seq_det_df = self.process_detections()
 
         joints_ok = osp.exists(joints_path) and len(os.listdir(joints_path)) == num_frames
-        if not joints_ok:
+        if not joints_ok or self.dataset_params['overwrite_joints']:
             self.process_joints()
         else:
             print(f"Loading processed joints for sequence {self.seq_name} from {joints_path}")

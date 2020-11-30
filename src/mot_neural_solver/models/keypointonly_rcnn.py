@@ -28,7 +28,7 @@ class KeypointOnlyRCNN(KeypointRCNN):
 
         keypoints = resize_keypoints(keypoints_probs[0], image_shapes[0], original_image_sizes[0])
 
-        return keypoints
+        return keypoints, kp_scores[0]
 
     def get_joints(self, features, keypoint_proposals, image_shapes):
         keypoint_features = self.roi_heads.keypoint_roi_pool(features, keypoint_proposals, image_shapes)
