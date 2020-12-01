@@ -267,7 +267,7 @@ class MOTGraph(object):
         reid_embeddings, node_feats = self._load_appearance_data()
 
         # TODO: We have to incorporate the detected joints into the graph somehow
-        self._get_joints()
+        joints = self._get_joints()
 
         # Determine graph connectivity (i.e. edges) and compute edge features
         edge_ixs, edge_feats_dict = self._get_edge_ixs(reid_embeddings)

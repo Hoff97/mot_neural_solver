@@ -6,6 +6,7 @@ from PIL import Image
 from skimage.io import imread
 #from skimage.util import pad
 from numpy import pad
+import math
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -122,8 +123,9 @@ class FrameDataset(Dataset):
         bounding_boxes[:, 3] = detections.bb_bot
 
         ids = np.array(detections.id.array)
+        detection_ids = np.array(detections.detection_id.array)
 
-        return frame_img, bounding_boxes, frame_path, detections.frame.unique()[0], ids
+        return frame_img, bounding_boxes, frame_path, detections.frame.unique()[0], ids, detection_ids
 
 def load_embeddings_from_imgs(det_df, dataset_params, seq_info_dict, cnn_model, return_imgs = False, use_cuda=True):
     """
@@ -180,7 +182,7 @@ def load_joints_from_imgs(det_df, dataset_params, seq_info_dict, use_cuda=True):
     model = keypointonlyrcnn_resnet50_fpn(pretrained=True).eval().cuda()
 
     with torch.no_grad():
-        for frame, bb_boxes, frame_path, _, ids in tqdm(loader):
+        for frame, bb_boxes, frame_path, _, ids, det_ids in tqdm(loader):
             # This assumes that joint_img_batch_size is 1
             keypoints, kp_scores = model([frame[0].cuda()], [bb_boxes[0].float().cuda()])
             # TODO: Aggregate and return detected joints
@@ -188,7 +190,8 @@ def load_joints_from_imgs(det_df, dataset_params, seq_info_dict, use_cuda=True):
     return None
 
 def plot_img_with_bb(img: np.ndarray, bb_boxes: np.ndarray,
-                     keypoints: np.ndarray, ids:np.ndarray, save_path: str):
+                     keypoints: np.ndarray, ids:np.ndarray, 
+                     scores: np.ndarray, save_path: str):
     img = (img*255).astype(np.uint8)
     img = img.transpose((1,2,0))
 
@@ -207,7 +210,9 @@ def plot_img_with_bb(img: np.ndarray, bb_boxes: np.ndarray,
         kps = keypoints[i]
         for j in range(kps.shape[0]):
             kp = kps[j]
-            circle = plt.Circle((kp[0], kp[1]), 5, color=color)
+            score = scores[i, j].item()
+            score = max(0,min(1,score/15))
+            circle = plt.Circle((kp[0], kp[1]), 3 + 10*score, color=color)
             ax.add_artist(circle)
 
     plt.savefig(save_path)
@@ -249,10 +254,16 @@ def load_precomputed_joints(det_df, seq_info_dict, joints_dir, use_cuda):
                                joints_dir)
     frames = sorted(det_df.frame.unique())
     joints = [torch.load(osp.join(joints_path, f"{frame}.pt")) for frame in frames]
+    joints = [torch.from_numpy(joint) for joint in joints]
     joints = torch.cat(joints, dim=0)
 
-    # ixs_to_drop = list(set(embeddings[:, 0].int().numpy()) - set(det_df['detection_id']))
-    # TODO: Drop joints of BB not present in det_df?
-    # TODO: There are probably multiple frames in det_df, so we have to load all of them
+    ixs_to_drop = list(set(joints[:, :, 0].int().numpy().flatten()) - set(det_df['detection_id']))
+
+    # A little hacky, but we cant just select the correct joints when they are order 2 tensors
+    joints = joints.reshape((-1, 4))
+    joints = joints[~np.isin(joints[:, 0], ixs_to_drop)]
+    joints = joints.reshape((-1, 17, 4))
+
+    joints = joints[:, :, 1:]
 
     return joints.to(torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu"))

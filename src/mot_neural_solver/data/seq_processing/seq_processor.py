@@ -364,7 +364,7 @@ class MOTSeqProcessor:
         model = keypointonlyrcnn_resnet50_fpn(pretrained=True).eval().cuda()
 
         with torch.no_grad():
-            for frame, bb_boxes, frame_path, frame_ix, ids in tqdm(loader):
+            for frame, bb_boxes, frame_path, frame_ix, ids, det_ids in tqdm(loader):
                 keypoints, kp_scores = model([frame[0].cuda()], [bb_boxes[0].float().cuda()])
                 keypoints, kp_scores = keypoints.cpu(), kp_scores.cpu()
 
@@ -374,7 +374,7 @@ class MOTSeqProcessor:
                 result = np.zeros((num_boxes, 17, 4))
                 result[:, :, 1:3] = keypoints[:, :, :2]
                 result[:, :, 3] = kp_scores
-                result[:, :, 0] = ids[0].reshape((-1, 1))
+                result[:, :, 0] = det_ids[0].reshape((-1, 1))
 
                 torch.save(result, frame_joints_path)
 
@@ -388,7 +388,8 @@ class MOTSeqProcessor:
                         os.makedirs(directory)
 
                     plot_img_with_bb(frame[0].numpy(), bb_boxes[0].numpy(),
-                                     keypoints.cpu().numpy(), ids[0].numpy(), save_path)
+                                     keypoints.cpu().numpy(), ids[0].numpy(),
+                                     kp_scores.cpu().numpy(), save_path)
 
         print("Finished computing and storing joint detections")
 
