@@ -266,8 +266,11 @@ class MOTGraph(object):
         # Load Appearance Data
         reid_embeddings, node_feats = self._load_appearance_data()
 
-        # TODO: We have to incorporate the detected joints into the graph somehow
         joints = self._get_joints()
+        if 'joints' in self.dataset_params['node_feats_to_use']:
+            node_feats = torch.cat((node_feats, joints.reshape((joints.shape[0], -1)).float()), dim = 1)
+
+        # TODO: Add other options for incorporating joints
 
         # Determine graph connectivity (i.e. edges) and compute edge features
         edge_ixs, edge_feats_dict = self._get_edge_ixs(reid_embeddings)

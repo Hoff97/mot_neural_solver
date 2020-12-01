@@ -62,10 +62,10 @@ class MOTNeuralSolver(pl.LightningModule):
                                           shuffle = True if mode == 'train' else False,
                                           num_workers=self.hparams['train_params']['num_workers'])
             return train_dataloader
-        
+
         elif return_data_loader and len(dataset) == 0:
             return []
-        
+
         else:
             return dataset
 

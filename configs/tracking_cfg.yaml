@@ -25,6 +25,7 @@ dataset_params:
                                # then loaded when needed (True) or compute every time they are neede
   overwrite_processed_data: False # If True, sequence detects are processed again, and previous data is overwritten
                                   # (GT assignment, precomp embeddings (if they exist), processed dets file
+  overwrite_joints: False # Like above, but for the joint detections
   precomputed_joints: True # Determines wether the joints per BB should be preprocessed
   det_file_name: tracktor_prepr_det # Name of the detections file used for val/test (matches the one created in preprocessing (see preprocessing.yaml)
                                     # e.g. change it for frcnn_prepr_det if not using tracktor for preprocessing
@@ -74,6 +75,9 @@ dataset_params:
     - bb_width_dists
     # ReID Score
     - emb_dist
+  node_feats_to_use:
+    # Detected joints
+    - joints
 
   target_fps_dict: # Frame sampling rate for sequences with static/moving camera
     moving: 9
@@ -122,7 +126,8 @@ graph_model_params:
     edge_in_dim: 6
     edge_fc_dims: [18, 18]
     edge_out_dim: 16
-    node_in_dim: 2048
+    #node_in_dim: 2048
+    node_in_dim: 2099
     #node_fc_dims: [512, 128]
     node_fc_dims: [128]
     node_out_dim: 32
