@@ -19,6 +19,16 @@
                 "from mot_neural_solver.path_cfg import OUTPUT_PATH; import shutil; shutil.rmtree(OUTPUT_PATH + \"/experiments\")"
             ],
             "problemMatcher": []
+        },
+        {
+            "label": "Run tensorboard",
+            "type": "shell",
+            "command": "${config:python.pythonPath}",
+            "args": [
+                "-c",
+                "from mot_neural_solver.path_cfg import OUTPUT_PATH; from tensorboard import program; tb = program.TensorBoard(); tb.configure(argv=[None, '--logdir', OUTPUT_PATH]); url = tb.launch()"
+            ],
+            "problemMatcher": []
         }
     ]
 }
