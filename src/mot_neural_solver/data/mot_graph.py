@@ -1,3 +1,4 @@
+from operator import pos
 import torch
 import  torch.nn.functional as F
 
@@ -269,6 +270,17 @@ class MOTGraph(object):
         joints = self._get_joints()
         if 'joints' in self.dataset_params['node_feats_to_use']:
             node_feats = torch.cat((node_feats, joints.reshape((joints.shape[0], -1)).float()), dim = 1)
+        if 'bb_positions' in self.dataset_params['node_feats_to_use']:
+            positions = torch.zeros((node_feats.shape[0], 4), dtype=torch.float32)
+            positions[:, 0] = torch.tensor(self.graph_df.bb_left.array)
+            positions[:, 1] = torch.tensor(self.graph_df.bb_top.array)
+            positions[:, 2] = torch.tensor(self.graph_df.bb_right.array)
+            positions[:, 3] = torch.tensor(self.graph_df.bb_bot.array)
+
+            if self.inference_mode:
+                positions = positions.cuda()
+
+            node_feats = torch.cat((node_feats, positions), dim = 1)
 
         # TODO: Add other options for incorporating joints
 
