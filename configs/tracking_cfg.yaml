@@ -20,18 +20,21 @@ train_params:
   tensorboard: False
 
 dataset_params:
+  # define which model to use for joint detection (don't forget to rename the directory)
+  keypoint_detection_model: mmpose_keypoint_resnet101 #keypointrcnn_resnet50
+  joints_dir: joints_keypointrcnn_torchvision
+
   # Dataset Processing params:
   precomputed_embeddings: True # Determines whether CNN embeddings for nodes and reid are computed once, stored, and
                                # then loaded when needed (True) or compute every time they are neede
   overwrite_processed_data: False # If True, sequence detects are processed again, and previous data is overwritten
                                   # (GT assignment, precomp embeddings (if they exist), processed dets file
-  overwrite_joints: False # Like above, but for the joint detections
+  overwrite_joints: True # Like above, but for the joint detections
   precomputed_joints: True # Determines wether the joints per BB should be preprocessed
   det_file_name: tracktor_prepr_det # Name of the detections file used for val/test (matches the one created in preprocessing (see preprocessing.yaml)
                                     # e.g. change it for frcnn_prepr_det if not using tracktor for preprocessing
   node_embeddings_dir: resnet50_conv # Storage name for precomputing CNN node embeddings
   reid_embeddings_dir: resnet50_w_fc256 # Storage name for precomputing reid embeddings
-  joints_dir: joints_keypointrcnn_torchvision
 
   # Gt assignment
   gt_assign_min_iou: 0.5 # Min IoU between a GT and detected box so that an assignment is allowed

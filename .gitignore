@@ -1,5 +1,5 @@
-data/*
-output/*
+./data/
+output/
 configs/path_cfg.py
 logs/
 .idea
