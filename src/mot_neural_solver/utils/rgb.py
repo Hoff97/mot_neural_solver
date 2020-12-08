@@ -7,10 +7,11 @@ from skimage.io import imread
 #from skimage.util import pad
 from numpy import pad
 import math
+import cv2
 
 import torch
 from torch.utils.data import Dataset, DataLoader
-from torchvision.transforms import Compose, Resize, ToTensor, Normalize
+from torchvision.transforms import Compose, Resize, ToTensor, Normalize, Resize, ToPILImage
 
 from torchvision.models.detection import keypointrcnn_resnet50_fpn
 from mot_neural_solver.models.keypointonly_rcnn import keypointonlyrcnn_resnet50_fpn
@@ -22,19 +23,21 @@ import numpy as np
 import os
 from tqdm import tqdm
 
+from mmcv.parallel.data_container import DataContainer
+import mot_neural_solver.models.mmpose_utils as utils
+from mmpose.core.evaluation.top_down_eval import get_max_preds
+
 class BoundingBoxDataset(Dataset):
     """
     Class used to process detections. Given a DataFrame (det_df) with detections of a MOT sequence, it returns
     the image patch corresponding to the detection's bounding box coordinates
     """
-    def __init__(self, det_df, seq_info_dict, pad_ = True, pad_mode = 'mean', output_size = (128, 64),
-                 return_det_ids_and_frame = False):
+    def __init__(self, det_df, seq_info_dict, pad_ = True, pad_mode = 'mean', output_size = (128, 64), return_det_ids_and_frame = False):
         self.det_df = det_df
         self.seq_info_dict = seq_info_dict
         self.pad = pad_
         self.pad_mode = pad_mode
-        self.transforms= Compose((Resize(output_size), ToTensor(), Normalize(mean=[0.485, 0.456, 0.406],
-                                                                             std=[0.229, 0.224, 0.225])))
+        self.transforms= Compose((Resize(output_size), ToTensor(), Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])))
 
         # Initialize two variables containing the path and img of the frame that is being loaded to avoid loading multiple
         # times for boxes in the same image
@@ -76,6 +79,190 @@ class BoundingBoxDataset(Dataset):
             return row['frame'], row['detection_id'], bb_img
         else:
             return bb_img
+
+class MMPOSECompatibleDataset(Dataset):
+    """
+    Dataset class used to load our Dataset as MMPOSE compatible.
+
+    COCO keypoint indices:
+        0: 'nose',
+        1: 'left_eye',
+        2: 'right_eye',
+        3: 'left_ear',
+        4: 'right_ear',
+        5: 'left_shoulder',
+        6: 'right_shoulder',
+        7: 'left_elbow',
+        8: 'right_elbow',
+        9: 'left_wrist',
+        10: 'right_wrist',
+        11: 'left_hip',
+        12: 'right_hip',
+        13: 'left_knee',
+        14: 'right_knee',
+        15: 'left_ankle',
+        16: 'right_ankle'
+    """
+    def __init__(self, det_df, seq_info_dict, model_in_size, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], cuda=True, debug=False):
+        self.debug = debug
+        self.det_df = det_df
+        self.seq_info_dict = seq_info_dict
+        self.model_in_size = model_in_size
+
+        self.resize = Resize(model_in_size) 
+        self.transforms = Compose([ToTensor(), Normalize(mean=mean, std=std)])
+
+        self.frames = self.det_df.frame_path.unique()
+
+        self.curr_frame_path = None
+        self.curr_frame = None
+        self.curr_bbox_crop = None
+        self.curr_bbox = None
+
+    def __len__(self):
+        return self.det_df.shape[0]
+
+    def __getitem__(self, idx):
+        row = self.det_df.iloc[idx]
+
+        # load in frame as np.ndarray
+        frame_path = row.frame_path
+        if frame_path != self.curr_frame_path:
+            self.curr_frame = imread(frame_path)
+            self.curr_frame_path = frame_path
+        
+        # cut out bbox
+        bbox = int(row.bb_left), int(row.bb_top), int(row.bb_width), int(row.bb_height)
+        self.curr_bbox = bbox
+        bbox_crop = utils.bbox_crop(self.curr_frame, bbox)
+        self.bbox_crop = bbox_crop
+
+        # resize bbox to fit into mmpose model
+        bbox_crop = Image.fromarray(bbox_crop)
+        bbox_crop = self.resize(bbox_crop)
+        self.resized_bbox_crop = bbox_crop
+
+        # show croppped bbox when debugging
+        if self.debug:
+            dbg_img = np.asarray(bbox_crop)
+            dbg_img = cv2.cvtColor(dbg_img, cv2.COLOR_RGB2BGR)
+            cv2.imshow('bbox', dbg_img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+        # transform to tensor and normalize
+        if self.transforms is not None:
+            bbox_crop = self.transforms(bbox_crop)
+
+        # get mmpose info for rescaling the image etc.
+        #mmpose_data_info = {
+        #    'image_file':   row.frame_path,
+        #    'rotation':     0,
+        #    'flip_pairs':   [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16]],
+        #    'center':       self._bbox_center(bbox),
+        #    'scale':        self._bbox_scale(bbox, self.model_in_size),
+        #    'bbox_score':   0.5
+        #}
+
+        ## debug bbox that has been derived from mmpose_data_info
+        #if self.debug:
+        #    dbg_img = self.curr_frame.copy()
+        #    dbg_img = cv2.cvtColor(dbg_img, cv2.COLOR_RGB2BGR)
+
+        #    bbox = utils.bbox_get_xywh(mmpose_data_info['center'], mmpose_data_info['scale'], self.model_in_size)
+        #    dbg_img = utils.bbox_draw(dbg_img, bbox)
+
+        #    cv2.imshow('mmpose_bbox', dbg_img)
+        #    cv2.waitKey(0)
+        #    cv2.destroyAllWindows()
+
+        #mmpose_data_container = DataContainer([[mmpose_data_info]], pad_dims=2, cpu_only=True)
+
+        #mmpose_data = {'img': torch.unsqueeze(bbox_crop, 0), 'img_metas': mmpose_data_container}
+
+        return bbox_crop
+
+    def _bbox_center(self, bbox):
+        """
+        Calculates a bounding box' center as np.array from given x, y and w, h.
+        """
+        x, y, w, h = bbox
+        cx, cy = x + w/2, y + h/2
+
+        return np.array([cx, cy], dtype=np.float32)
+
+    def _bbox_scale(self, bbox, model_in_size):
+        """
+        Reverse calculates scaling done on each axis of the model input size to fit the bounding box.
+        """
+        _, _, bb_w, bb_h = bbox
+        in_h, in_w = model_in_size
+
+        sx, sy = bb_w/in_w, bb_h/in_h
+
+        return np.array([sx, sy], dtype=np.float32)
+
+    def heatmaps_process(self, heatmaps):
+        """
+        Processes the heatmaps returned by the mmpose model and fits it to the frame coordinates.
+        """
+        keypoints, scores = get_max_preds(heatmaps.detach().cpu().numpy())
+        _, _, H, W = heatmaps.shape
+
+        # scale to fit original model input size predicted kps
+        mh, mw = self.model_in_size
+        scaled_kps = np.zeros((1, scores.shape[1], 3), dtype=np.float32)
+        for i, kp in enumerate(keypoints[0]):
+            kx, ky = kp
+            sx, sy = mw / W, mh / H
+            scaled_kx, scaled_ky = kx * sx, ky * sy
+            kp_score = scores[0][i]
+            scaled_kps[0][i] = np.array([scaled_kx, scaled_ky, kp_score], dtype=np.float32)
+
+        # show croppped bbox with keypoints when debugging
+        if self.debug:
+            dbg_img = np.asarray(self.resized_bbox_crop)
+            dbg_img = cv2.cvtColor(dbg_img, cv2.COLOR_RGB2BGR)
+            dbg_img = utils.keypoints_draw(scaled_kps, dbg_img)
+            cv2.imshow('dbg', dbg_img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+        # calculate keypoints in relation to the actual bbox
+        actual_kps = np.zeros_like(scaled_kps)
+        for i, skp in enumerate(scaled_kps[0]):
+            skpx, skpy, score = skp
+            mh, mw = self.model_in_size
+            _, _, bbox_w, bbox_h = self.curr_bbox
+            sx, sy = bbox_w / mw, bbox_h / mh
+            actkx, actky = skpx * sx, skpy * sy
+            actual_kps[0][i] = np.array([actkx, actky, score], dtype=np.float32)
+
+        if self.debug:
+            dbg_img = np.asarray(self.bbox_crop)
+            dbg_img = cv2.cvtColor(dbg_img, cv2.COLOR_RGB2BGR)
+            dbg_img = utils.keypoints_draw(actual_kps, dbg_img)
+            cv2.imshow('dbg', dbg_img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+        # calculate keypoints in relation to the absolute frame coordinates
+        abs_kps = np.zeros_like(scaled_kps)
+        for i, akp in enumerate(actual_kps[0]):
+            akx, aky, score = akp
+            bbx, bby, _, _ = self.curr_bbox
+            abskx, absky = bbx + akx, bby + aky
+            abs_kps[0][i] = np.array([abskx, absky, score], dtype=np.float32)
+
+        if self.debug:
+            dbg_img = np.asarray(self.curr_frame)
+            dbg_img = cv2.cvtColor(dbg_img, cv2.COLOR_RGB2BGR)
+            dbg_img = utils.keypoints_draw(abs_kps, dbg_img)
+            cv2.imshow('dbg', dbg_img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+        return abs_kps
 
 class FrameDataset(Dataset):
     """
@@ -248,6 +435,7 @@ def load_precomputed_embeddings(det_df, seq_info_dict, embeddings_dir, use_cuda)
     embeddings = embeddings[:, 1:]  # Get rid of the detection index
 
     return embeddings.to(torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu"))
+
 
 def load_precomputed_joints(det_df, seq_info_dict, joints_dir, use_cuda):
     joints_path = osp.join(seq_info_dict['seq_path'], 'processed_data', 'joints', seq_info_dict['det_file_name'],
