@@ -22,16 +22,19 @@ If you want to add new/custom sequences:
 """
 import pandas as pd
 import numpy as np
+import cv2
 
 from lapsolver import solve_dense
 
 from mot_neural_solver.data.seq_processing.MOTCha_loader import get_mot_det_df, get_mot_det_df_from_gt
 from mot_neural_solver.data.seq_processing.MOT15_loader import get_mot15_det_df, get_mot15_det_df_from_gt
 from mot_neural_solver.utils.iou import iou
-from mot_neural_solver.utils.rgb import BoundingBoxDataset, FrameDataset, plot_img_with_bb
+from mot_neural_solver.utils.rgb import BoundingBoxDataset, FrameDataset, MMPOSECompatibleDataset, plot_img_with_bb
+import mot_neural_solver.models.mmpose_models as mmpose_mdls
 
 import os
 import os.path as osp
+import sys
 
 import shutil
 
@@ -39,6 +42,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from mot_neural_solver.models.keypointonly_rcnn import keypointonlyrcnn_resnet50_fpn
+import mot_neural_solver.models.mmpose_utils as utils
 
 from tqdm import tqdm
 
@@ -150,10 +154,14 @@ class MOTSeqProcessor:
 
         self.det_df_loader = _SEQ_TYPE_DETS_DF_LOADER[self.seq_type]
         self.dataset_params = dataset_params
+         
+        self.logger = logger
 
         self.cnn_model = cnn_model
+        self.keypoint_model = dataset_params['keypoint_detection_model']
 
-        self.logger = logger
+        self.SUPPORTED_KP_MODELS = ['keypointrcnn_resnet50', 'mmpose_keypoint_resnet101']
+        assert self.keypoint_model in self.SUPPORTED_KP_MODELS, f"Keypoint model defined in config not supported. supported models are:\n\t{SUPPORTED_KP_MODELS}"
 
     def _ensure_boxes_in_frame(self):
         """
@@ -344,31 +352,43 @@ class MOTSeqProcessor:
     def _store_joints(self):
         if not hasattr(self, 'det_df'):
             self._get_det_df()
-        assert self.dataset_params['joints_dir']
+        assert self.dataset_params['keypoint_detection_model']
 
         # Create dirs to store embeddings
-        joints_path = osp.join(self.det_df.seq_info_dict['seq_path'], 'processed_data/joints',
-                                   self.det_df.seq_info_dict['det_file_name'], self.dataset_params['joints_dir'])
+        storage_path = osp.join(self.det_df.seq_info_dict['seq_path'], 'processed_data/joints', self.det_df.seq_info_dict['det_file_name'], self.keypoint_model)
 
-        if osp.exists(joints_path):
+        if osp.exists(storage_path):
             print("Found existing stored joint detectiond. Deleting them and replacing them for new ones")
-            shutil.rmtree(joints_path)
+            shutil.rmtree(storage_path)
 
-        os.makedirs(joints_path)
+        os.makedirs(storage_path)
 
         print(f"Computing joints for {len(self.det_df.frame.unique())} frames")
 
+        # decide which model and dataset to use for keypoint detection
+        if self.keypoint_model == 'keypointrcnn_resnet50':
+            self._keypointrcnn_resnet50_detect(self.keypoint_model)
+        elif 'mmpose' in self.keypoint_model:
+            self._mmpose_top_down_model_detect(self.keypoint_model)
+        else:
+            sys.exit('error: keypoint model defined in config not found.')
+
+        print("Finished computing and storing joint detections")
+
+    def _keypointrcnn_resnet50_detect(self, model_name):
+        """
+        Detects keypoint for torchvisions keypointrcnn and saves them.
+        """
+        model = keypointonlyrcnn_resnet50_fpn(pretrained=True).cuda().eval()
         ds = FrameDataset(self.det_df, seq_info_dict = self.det_df.seq_info_dict)
         loader = DataLoader(ds, batch_size=1, pin_memory=True, num_workers=0)
-
-        model = keypointonlyrcnn_resnet50_fpn(pretrained=True).eval().cuda()
 
         with torch.no_grad():
             for frame, bb_boxes, frame_path, frame_ix, ids, det_ids in tqdm(loader):
                 keypoints, kp_scores = model([frame[0].cuda()], [bb_boxes[0].float().cuda()])
                 keypoints, kp_scores = keypoints.cpu(), kp_scores.cpu()
 
-                frame_joints_path = osp.join(joints_path, f"{frame_ix.item()}.pt")
+                frame_joints_path = osp.join(save_dir, f"{frame_ix.item()}.pt")
 
                 num_boxes = keypoints.shape[0]
                 result = np.zeros((num_boxes, 17, 4))
@@ -391,7 +411,25 @@ class MOTSeqProcessor:
                                      keypoints.cpu().numpy(), ids[0].numpy(),
                                      kp_scores.cpu().numpy(), save_path)
 
-        print("Finished computing and storing joint detections")
+    def _mmpose_top_down_model_detect(self, model_name, return_heatmaps=False):
+        """
+        Performs inference for MMPOSE top-down models and saves detected keypoint joints to disk for later usage during training.
+        """
+        model = mmpose_mdls.top_down_model(model_name)
+        model_in_size = mmpose_mdls.model_input_size(model_name)
+        ds = MMPOSECompatibleDataset(self.det_df, self.det_df.seq_info_dict, model_in_size, debug=True)
+        loader = DataLoader(ds, batch_size=1, pin_memory=True, num_workers=0)
+
+        for bbox_crop in tqdm(loader):
+            with torch.no_grad():
+                heatmaps = model.forward_dummy(bbox_crop)
+            
+            keypoints = ds.heatmaps_process(heatmaps)
+
+        if return_heatmaps:
+            return keypoints, heatmaps.detach().cpu().numpy()
+        else:
+            return keypoints
 
     def process_detections(self):
         # See class header
