@@ -179,7 +179,7 @@ class MOTGraph(object):
         if self.inference_mode and not self.dataset_params['precomputed_embeddings']:
             return load_joints_from_imgs(self.graph_df, self.dataset_params, self.seq_info_dict, self.inference_mode)
         else:
-            return load_precomputed_joints(self.graph_df, self.seq_info_dict, self.dataset_params['joints_dir'], self.inference_mode)
+            return load_precomputed_joints(self.graph_df, self.seq_info_dict, self.dataset_params['keypoint_detection_model'], self.inference_mode)
 
     def _get_edge_ixs(self, reid_embeddings):
         """

@@ -349,25 +349,22 @@ class MOTSeqProcessor:
             #print("Finished storing embeddings")
         print("Finished computing and storing embeddings")
 
-    def _store_joints(self):
+    def _store_joints(self, joints_path):
         if not hasattr(self, 'det_df'):
             self._get_det_df()
         assert self.dataset_params['keypoint_detection_model']
 
-        # Create dirs to store embeddings
-        storage_path = osp.join(self.det_df.seq_info_dict['seq_path'], 'processed_data/joints', self.det_df.seq_info_dict['det_file_name'], self.keypoint_model)
-
-        if osp.exists(storage_path):
+        if osp.exists(joints_path):
             print("Found existing stored joint detectiond. Deleting them and replacing them for new ones")
-            shutil.rmtree(storage_path)
+            shutil.rmtree(joints_path)
 
-        os.makedirs(storage_path)
+        os.makedirs(joints_path)
 
         print(f"-> Computing joints for {len(self.det_df.frame.unique())} frames")
 
         # decide which model and dataset to use for keypoint detection
         if self.keypoint_model == 'keypointrcnn_resnet50':
-            self._keypointrcnn_resnet50_detect_and_store(self.keypoint_model)
+            self._keypointrcnn_resnet50_detect_and_store(joints_path)
         elif 'mmpose' in self.keypoint_model:
             self._mmpose_top_down_model_detect_and_store(self.keypoint_model)
         else:
@@ -375,7 +372,7 @@ class MOTSeqProcessor:
 
         print("-> Finished computing and storing joint detections")
 
-    def _keypointrcnn_resnet50_detect_and_store(self, model_name):
+    def _keypointrcnn_resnet50_detect_and_store(self, save_dir):
         """
         Detects keypoint for torchvisions keypointrcnn and returns them.
         """
@@ -470,8 +467,8 @@ class MOTSeqProcessor:
 
         return self.det_df
 
-    def process_joints(self):
-        self._store_joints()
+    def process_joints(self, joints_path):
+        self._store_joints(joints_path)
 
     def load_or_process_detections(self):
         """
@@ -487,7 +484,7 @@ class MOTSeqProcessor:
         node_embeds_path = osp.join(seq_path, 'processed_data/embeddings', det_file_to_use, self.dataset_params['node_embeddings_dir'])
         reid_embeds_path = osp.join(seq_path, 'processed_data/embeddings', det_file_to_use, self.dataset_params['reid_embeddings_dir'])
 
-        joints_path = osp.join(seq_path, 'processed_data/joints', det_file_to_use, self.dataset_params['joints_dir'])
+        joints_path = osp.join(seq_path, 'processed_data', 'joints', det_file_to_use, self.keypoint_model)
 
         try:
             num_frames = len(pd.read_pickle(seq_det_df_path)['frame'].unique())
@@ -510,7 +507,7 @@ class MOTSeqProcessor:
 
         joints_ok = osp.exists(joints_path) and len(os.listdir(joints_path)) == num_frames
         if not joints_ok or self.dataset_params['overwrite_joints']:
-            self.process_joints()
+            self.process_joints(joints_path)
         else:
             print(f"Loading processed joints for sequence {self.seq_name} from {joints_path}")
 
