@@ -114,10 +114,12 @@ class MMPOSECompatibleDataset(Dataset):
 
         self.frames = self.det_df.frame_path.unique()
 
+        self.frame_id = -1
         self.curr_frame_path = None
         self.curr_frame = None
         self.curr_bbox_crop = None
         self.curr_bbox = None
+        self.curr_resized_bbox_crop = None
 
     def __len__(self):
         return self.det_df.shape[0]
@@ -130,6 +132,7 @@ class MMPOSECompatibleDataset(Dataset):
         if frame_path != self.curr_frame_path:
             self.curr_frame = imread(frame_path)
             self.curr_frame_path = frame_path
+            self.frame_id += 1
         
         # cut out bbox
         bbox = int(row.bb_left), int(row.bb_top), int(row.bb_width), int(row.bb_height)
@@ -138,7 +141,10 @@ class MMPOSECompatibleDataset(Dataset):
         self.bbox_crop = bbox_crop
 
         # resize bbox to fit into mmpose model
-        bbox_crop = Image.fromarray(bbox_crop)
+        try:
+            bbox_crop = Image.fromarray(bbox_crop)
+        except:
+            import pdb; pdb.set_trace()
         bbox_crop = self.resize(bbox_crop)
         self.resized_bbox_crop = bbox_crop
 
@@ -154,33 +160,7 @@ class MMPOSECompatibleDataset(Dataset):
         if self.transforms is not None:
             bbox_crop = self.transforms(bbox_crop)
 
-        # get mmpose info for rescaling the image etc.
-        #mmpose_data_info = {
-        #    'image_file':   row.frame_path,
-        #    'rotation':     0,
-        #    'flip_pairs':   [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16]],
-        #    'center':       self._bbox_center(bbox),
-        #    'scale':        self._bbox_scale(bbox, self.model_in_size),
-        #    'bbox_score':   0.5
-        #}
-
-        ## debug bbox that has been derived from mmpose_data_info
-        #if self.debug:
-        #    dbg_img = self.curr_frame.copy()
-        #    dbg_img = cv2.cvtColor(dbg_img, cv2.COLOR_RGB2BGR)
-
-        #    bbox = utils.bbox_get_xywh(mmpose_data_info['center'], mmpose_data_info['scale'], self.model_in_size)
-        #    dbg_img = utils.bbox_draw(dbg_img, bbox)
-
-        #    cv2.imshow('mmpose_bbox', dbg_img)
-        #    cv2.waitKey(0)
-        #    cv2.destroyAllWindows()
-
-        #mmpose_data_container = DataContainer([[mmpose_data_info]], pad_dims=2, cpu_only=True)
-
-        #mmpose_data = {'img': torch.unsqueeze(bbox_crop, 0), 'img_metas': mmpose_data_container}
-
-        return bbox_crop
+        return bbox_crop, self.frame_id, row.frame, row.detection_id
 
     def _bbox_center(self, bbox):
         """
