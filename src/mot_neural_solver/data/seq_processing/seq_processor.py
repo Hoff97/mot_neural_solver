@@ -363,74 +363,102 @@ class MOTSeqProcessor:
 
         os.makedirs(storage_path)
 
-        print(f"Computing joints for {len(self.det_df.frame.unique())} frames")
+        print(f"-> Computing joints for {len(self.det_df.frame.unique())} frames")
 
         # decide which model and dataset to use for keypoint detection
         if self.keypoint_model == 'keypointrcnn_resnet50':
-            self._keypointrcnn_resnet50_detect(self.keypoint_model)
+            self._keypointrcnn_resnet50_detect_and_store(self.keypoint_model)
         elif 'mmpose' in self.keypoint_model:
-            self._mmpose_top_down_model_detect(self.keypoint_model)
+            self._mmpose_top_down_model_detect_and_store(self.keypoint_model)
         else:
             sys.exit('error: keypoint model defined in config not found.')
 
-        print("Finished computing and storing joint detections")
+        print("-> Finished computing and storing joint detections")
 
-    def _keypointrcnn_resnet50_detect(self, model_name):
+    def _keypointrcnn_resnet50_detect_and_store(self, model_name):
         """
-        Detects keypoint for torchvisions keypointrcnn and saves them.
+        Detects keypoint for torchvisions keypointrcnn and returns them.
         """
         model = keypointonlyrcnn_resnet50_fpn(pretrained=True).cuda().eval()
         ds = FrameDataset(self.det_df, seq_info_dict = self.det_df.seq_info_dict)
         loader = DataLoader(ds, batch_size=1, pin_memory=True, num_workers=0)
 
-        with torch.no_grad():
-            for frame, bb_boxes, frame_path, frame_ix, ids, det_ids in tqdm(loader):
+        storage_path = osp.join(self.det_df.seq_info_dict['seq_path'], 'processed_data/joints', self.det_df.seq_info_dict['det_file_name'], self.keypoint_model)
+
+        for frame, bb_boxes, frame_path, frame_ix, ids, det_ids in tqdm(loader):
+            with torch.no_grad():
                 keypoints, kp_scores = model([frame[0].cuda()], [bb_boxes[0].float().cuda()])
-                keypoints, kp_scores = keypoints.cpu(), kp_scores.cpu()
+            keypoints, kp_scores = keypoints.cpu(), kp_scores.cpu()
 
-                frame_joints_path = osp.join(save_dir, f"{frame_ix.item()}.pt")
+            frame_joints_path = osp.join(storage_path, f"{frame_ix.item()}.pt")
 
-                num_boxes = keypoints.shape[0]
-                result = np.zeros((num_boxes, 17, 4))
-                result[:, :, 1:3] = keypoints[:, :, :2]
-                result[:, :, 3] = kp_scores
-                result[:, :, 0] = det_ids[0].reshape((-1, 1))
+            num_boxes = keypoints.shape[0]
+            result = np.zeros((num_boxes, 17, 4))
+            result[:, :, 1:3] = keypoints[:, :, :2]
+            result[:, :, 3] = kp_scores
+            result[:, :, 0] = det_ids[0].reshape((-1, 1))
 
-                torch.save(result, frame_joints_path)
+            torch.save(result, frame_joints_path)
 
-                if self.dataset_params["visualize_joint_detections"]:
-                    dir_name = os.path.dirname(frame_path[0])
-                    base_name = os.path.basename(frame_path[0])
+            if self.dataset_params["debug"]:
+                dir_name = os.path.dirname(frame_path[0])
+                base_name = os.path.basename(frame_path[0])
 
-                    directory = os.path.join(dir_name, "joints")
-                    save_path = os.path.join(directory, base_name)
-                    if not os.path.exists(directory):
-                        os.makedirs(directory)
+                directory = os.path.join(dir_name, "joints")
+                save_path = os.path.join(directory, base_name)
+                if not os.path.exists(directory):
+                    os.makedirs(directory)
 
-                    plot_img_with_bb(frame[0].numpy(), bb_boxes[0].numpy(),
-                                     keypoints.cpu().numpy(), ids[0].numpy(),
-                                     kp_scores.cpu().numpy(), save_path)
+                plot_img_with_bb(frame[0].numpy(), bb_boxes[0].numpy(),
+                                 keypoints.cpu().numpy(), ids[0].numpy(),
+                                 kp_scores.cpu().numpy(), save_path)
 
-    def _mmpose_top_down_model_detect(self, model_name, return_heatmaps=False):
+    def _mmpose_top_down_model_detect_and_store(self, model_name, save_heatmaps=False):
         """
         Performs inference for MMPOSE top-down models and saves detected keypoint joints to disk for later usage during training.
         """
         model = mmpose_mdls.top_down_model(model_name)
         model_in_size = mmpose_mdls.model_input_size(model_name)
-        ds = MMPOSECompatibleDataset(self.det_df, self.det_df.seq_info_dict, model_in_size, debug=True)
+        ds = MMPOSECompatibleDataset(self.det_df, self.det_df.seq_info_dict, model_in_size, debug=self.dataset_params['debug'])
         loader = DataLoader(ds, batch_size=1, pin_memory=True, num_workers=0)
 
-        for bbox_crop in tqdm(loader):
+        storage_path = osp.join(self.det_df.seq_info_dict['seq_path'], 'processed_data/joints', self.det_df.seq_info_dict['det_file_name'], self.keypoint_model)
+
+        curr_frame_id = 0
+        curr_frame_ix = 0
+        frame_keypoints = []
+        for bbox_crop, frame_id, frame_ix, bbox_id in tqdm(loader):
             with torch.no_grad():
                 heatmaps = model.forward_dummy(bbox_crop)
-            
             keypoints = ds.heatmaps_process(heatmaps)
 
-        if return_heatmaps:
-            return keypoints, heatmaps.detach().cpu().numpy()
-        else:
-            return keypoints
+            # aggreate all bbox keypoints for a single frame
+            if curr_frame_id != frame_id.item():
 
+                keypoints_to_save = np.array(frame_keypoints)
+
+                save_path = osp.join(storage_path, f"{curr_frame_ix.item()}.pt")
+                torch.save(keypoints_to_save, save_path)
+                frame_keypoints = []
+
+            bb_id_keypoints = np.zeros((17, 4))
+            bb_id_keypoints[:, 1:4] = keypoints.squeeze()
+            bb_id_keypoints[:, 0]   = bbox_id.item()
+            frame_keypoints.append(bb_id_keypoints)
+            curr_frame_ix = frame_ix
+
+        # save also last bounding box in last frame
+        last_frame_keypoints_to_save = []
+        for kps in keypoints_to_save.tolist():
+            last_frame_keypoints_to_save.append(kps)
+
+        for kps in frame_keypoints:
+            last_frame_keypoints_to_save.append(kps.tolist())
+
+        save_path = osp.join(storage_path, f"{frame_ix.item()}.pt")
+        last_frame_keypoints_to_save = np.array(last_frame_keypoints_to_save)
+        torch.save(last_frame_keypoints_to_save, save_path)
+            
     def process_detections(self):
         # See class header
         self._get_det_df()
