@@ -437,9 +437,9 @@ def load_precomputed_embeddings(det_df, seq_info_dict, embeddings_dir, use_cuda)
     return embeddings.to(torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu"))
 
 
-def load_precomputed_joints(det_df, seq_info_dict, joints_dir, use_cuda):
-    joints_path = osp.join(seq_info_dict['seq_path'], 'processed_data', 'joints', seq_info_dict['det_file_name'],
-                               joints_dir)
+def load_precomputed_joints(det_df, seq_info_dict, keypoint_model, use_cuda):
+    joints_path = osp.join(seq_info_dict['seq_path'], 'processed_data', 'joints', seq_info_dict['det_file_name'], keypoint_model)
+
     frames = sorted(det_df.frame.unique())
     joints = [torch.load(osp.join(joints_path, f"{frame}.pt")) for frame in frames]
     joints = [torch.from_numpy(joint) for joint in joints]
