@@ -420,7 +420,7 @@ class MOTSeqProcessor:
         model = mmpose_mdls.top_down_model(model_name)
         model_in_size = mmpose_mdls.model_input_size(model_name)
         ds = MMPOSECompatibleDataset(self.det_df, self.det_df.seq_info_dict, model_in_size, debug=self.dataset_params['debug'])
-        loader = DataLoader(ds, batch_size=1, pin_memory=True, num_workers=0)
+        loader = DataLoader(ds, batch_size=1, pin_memory=False, num_workers=0)
 
         storage_path = osp.join(self.det_df.seq_info_dict['seq_path'], 'processed_data/joints', self.det_df.seq_info_dict['det_file_name'], self.keypoint_model)
 

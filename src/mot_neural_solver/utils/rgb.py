@@ -141,10 +141,7 @@ class MMPOSECompatibleDataset(Dataset):
         self.bbox_crop = bbox_crop
 
         # resize bbox to fit into mmpose model
-        try:
-            bbox_crop = Image.fromarray(bbox_crop)
-        except:
-            import pdb; pdb.set_trace()
+        bbox_crop = Image.fromarray(bbox_crop)
         bbox_crop = self.resize(bbox_crop)
         self.resized_bbox_crop = bbox_crop
 
@@ -159,6 +156,10 @@ class MMPOSECompatibleDataset(Dataset):
         # transform to tensor and normalize
         if self.transforms is not None:
             bbox_crop = self.transforms(bbox_crop)
+
+        # use cuda if available
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu") 
+        bbox_crop = bbox_crop.to(device)
 
         return bbox_crop, self.frame_id, row.frame, row.detection_id
 

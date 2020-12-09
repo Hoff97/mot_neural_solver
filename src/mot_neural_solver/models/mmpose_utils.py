@@ -47,7 +47,8 @@ def load_model(cfg, ckp_link):
     """
     model = build_posenet(cfg.model)
     load_checkpoint(model, ckp_link, map_location='cpu')
-    #model = MMDataParallel(model, device_ids=[0]) # device id, just set first cuda GPU
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu") 
+    model.to(device)
 
     return model
 
