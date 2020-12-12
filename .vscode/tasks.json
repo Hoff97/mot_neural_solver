@@ -26,7 +26,7 @@
             "command": "${config:python.pythonPath}",
             "args": [
                 "-c",
-                "from mot_neural_solver.path_cfg import OUTPUT_PATH; from tensorboard import program; tb = program.TensorBoard(); tb.configure(argv=[None, '--logdir', OUTPUT_PATH]); url = tb.launch()"
+                "from mot_neural_solver.path_cfg import OUTPUT_PATH; from tensorboard import program; tb = program.TensorBoard(); tb.configure(argv=[None, \"--logdir\", OUTPUT_PATH]); url = tb.launch(); from threading import Event; Event().wait()"
             ],
             "problemMatcher": []
         }

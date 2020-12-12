@@ -6,10 +6,6 @@
             "type": "python",
             "request": "launch",
             "program": "scripts/train.py",
-            "args": [
-                "with",
-                "configs/tracking_with_joints.yaml"
-            ],
             "console": "integratedTerminal",
             "justMyCode": false
         },

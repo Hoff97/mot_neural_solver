@@ -9,8 +9,9 @@ import os.path as osp
 
 from mot_neural_solver.pl_module.pl_module import MOTNeuralSolver
 
-from pytorch_lightning import Trainer
+from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.callbacks.lr_logger import LearningRateLogger
 #from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 
 from sacred import SETTINGS
@@ -52,7 +53,7 @@ def cfg(cross_val_split, eval_params, dataset_params, graph_model_params, data_s
 @ex.automain
 def main(_config, _run):
     sacred.commands.print_config(_run)
-    make_deterministic(12345)
+    seed_everything(12345)
 
     model = MOTNeuralSolver(hparams = dict(_config))
 
@@ -66,9 +67,16 @@ def main(_config, _run):
 
     ckpt_callback = ModelCheckpoint(save_epoch_start = _config['train_params']['save_epoch_start'],
                                     save_every_epoch = _config['train_params']['save_every_epoch'])
+    mot_callback = MOTMetricsLogger(compute_oracle_results = _config['eval_params']['normalize_mot_metrics'])
+
+    callbacks = [ckpt_callback, mot_callback]
+
+    if _config['train_params']['lr_scheduler']['type'] is not None:
+        lr_logger = LearningRateLogger()
+        callbacks.append(lr_logger)
 
     trainer = Trainer(gpus=1,
-                      callbacks=[MOTMetricsLogger(compute_oracle_results = _config['eval_params']['normalize_mot_metrics']), ckpt_callback],
+                      callbacks=callbacks,
                       weights_summary = None,
                       checkpoint_callback=False,
                       max_epochs=_config['train_params']['num_epochs'],
@@ -76,7 +84,8 @@ def main(_config, _run):
                       check_val_every_n_epoch=_config['eval_params']['check_val_every_n_epoch'],
                       nb_sanity_val_steps=0,
                       logger =logger,
-                      default_save_path=osp.join(OUTPUT_PATH, 'experiments', run_str))
+                      default_save_path=osp.join(OUTPUT_PATH, 'experiments', run_str),
+                      deterministic=True)
     trainer.fit(model)
 
 
