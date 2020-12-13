@@ -193,17 +193,13 @@ def bbox_crop(img, bbox):
     if bbox_x <= 0:
         bbox_w = bbox_w + bbox_x
         bbox_x = 0
-        print(f'> bbox safeguard: 0, bbox: {bbox}')
     if bbox_y <= 0:
         bbox_h = bbox_h + bbox_y
         bbox_y = 0
-        print(f'> bbox safeguard: 1, bbox: {bbox}')
     if bbox_w <= 0:
         bbox_w = 1
-        print(f'> bbox safeguard: 2, bbox: {bbox}')
     if bbox_h <= 0:
         bbox_h = 1
-        print(f'> bbox safeguard: 3, bbox: {bbox}')
 
     from_x, from_y = bbox_x, bbox_y
     to_x, to_y = bbox_x + bbox_w, bbox_y + bbox_h

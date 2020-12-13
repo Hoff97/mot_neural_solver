@@ -160,9 +160,6 @@ class MOTSeqProcessor:
         self.cnn_model = cnn_model
         self.keypoint_model = dataset_params['keypoint_detection_model']
 
-        self.SUPPORTED_KP_MODELS = ['keypointrcnn_resnet50', 'mmpose_keypoint_resnet101']
-        assert self.keypoint_model in self.SUPPORTED_KP_MODELS, f"Keypoint model defined in config not supported. supported models are:\n\t{SUPPORTED_KP_MODELS}"
-
     def _ensure_boxes_in_frame(self):
         """
         Determines whether boxes are allowed to have some area outside the image (all GT annotations in MOT15 are inside
@@ -304,7 +301,6 @@ class MOTSeqProcessor:
             sub_df_mask = self.det_df.frame.between(frame_start, frame_end - 1)
             sub_df = self.det_df.loc[sub_df_mask]
 
-            #print(sub_df.frame.min(), sub_df.frame.max())
             bbox_dataset = BoundingBoxDataset(sub_df, seq_info_dict=self.det_df.seq_info_dict,
                                               return_det_ids_and_frame = True)
             bbox_loader = DataLoader(bbox_dataset, batch_size=self.dataset_params['img_batch_size'], pin_memory=True,
@@ -421,20 +417,18 @@ class MOTSeqProcessor:
 
         storage_path = osp.join(self.det_df.seq_info_dict['seq_path'], 'processed_data/joints', self.det_df.seq_info_dict['det_file_name'], self.keypoint_model)
 
-        curr_frame_id = 0
-        curr_frame_ix = 0
+        curr_frame_ix = 1
         frame_keypoints = []
-        for bbox_crop, frame_id, frame_ix, bbox_id in tqdm(loader):
+        for bbox_crop, frame_ix, bbox_id in tqdm(loader):
             with torch.no_grad():
                 heatmaps = model.forward_dummy(bbox_crop)
             keypoints = ds.heatmaps_process(heatmaps)
 
             # aggreate all bbox keypoints for a single frame
-            if curr_frame_id != frame_id.item():
-
+            if curr_frame_ix != frame_ix.item():
                 keypoints_to_save = np.array(frame_keypoints)
 
-                save_path = osp.join(storage_path, f"{curr_frame_ix.item()}.pt")
+                save_path = osp.join(storage_path, f"{curr_frame_ix}.pt")
                 torch.save(keypoints_to_save, save_path)
                 frame_keypoints = []
 
@@ -442,19 +436,12 @@ class MOTSeqProcessor:
             bb_id_keypoints[:, 1:4] = keypoints.squeeze()
             bb_id_keypoints[:, 0]   = bbox_id.item()
             frame_keypoints.append(bb_id_keypoints)
-            curr_frame_ix = frame_ix
+            curr_frame_ix = frame_ix.item()
 
         # save also last bounding box in last frame
-        last_frame_keypoints_to_save = []
-        for kps in keypoints_to_save.tolist():
-            last_frame_keypoints_to_save.append(kps)
-
-        for kps in frame_keypoints:
-            last_frame_keypoints_to_save.append(kps.tolist())
-
         save_path = osp.join(storage_path, f"{frame_ix.item()}.pt")
-        last_frame_keypoints_to_save = np.array(last_frame_keypoints_to_save)
-        torch.save(last_frame_keypoints_to_save, save_path)
+        last_keypoints_to_save = np.array(frame_keypoints)
+        torch.save(last_keypoints_to_save, save_path)
             
     def process_detections(self):
         # See class header

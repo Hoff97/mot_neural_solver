@@ -114,7 +114,6 @@ class MMPOSECompatibleDataset(Dataset):
 
         self.frames = self.det_df.frame_path.unique()
 
-        self.frame_id = -1
         self.curr_frame_path = None
         self.curr_frame = None
         self.curr_bbox_crop = None
@@ -132,7 +131,6 @@ class MMPOSECompatibleDataset(Dataset):
         if frame_path != self.curr_frame_path:
             self.curr_frame = imread(frame_path)
             self.curr_frame_path = frame_path
-            self.frame_id += 1
         
         # cut out bbox
         bbox = int(row.bb_left), int(row.bb_top), int(row.bb_width), int(row.bb_height)
@@ -161,7 +159,7 @@ class MMPOSECompatibleDataset(Dataset):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu") 
         bbox_crop = bbox_crop.to(device)
 
-        return bbox_crop, self.frame_id, row.frame, row.detection_id
+        return bbox_crop, row.frame, row.detection_id
 
     def _bbox_center(self, bbox):
         """
@@ -283,7 +281,7 @@ class FrameDataset(Dataset):
 
         detections = self.det_df.loc[self.det_df['frame_path'] == frame_path]
 
-        bounding_boxes = np.zeros((len(detections),4))
+        bounding_boxes = np.zeros((len(detections), 4))
 
         bounding_boxes[:, 0] = detections.bb_left
         bounding_boxes[:, 1] = detections.bb_top
@@ -422,6 +420,7 @@ def load_precomputed_joints(det_df, seq_info_dict, keypoint_model, use_cuda):
     joints_path = osp.join(seq_info_dict['seq_path'], 'processed_data', 'joints', seq_info_dict['det_file_name'], keypoint_model)
 
     frames = sorted(det_df.frame.unique())
+
     joints = [torch.load(osp.join(joints_path, f"{frame}.pt")) for frame in frames]
     joints = [torch.from_numpy(joint) for joint in joints]
     joints = torch.cat(joints, dim=0)
@@ -434,5 +433,6 @@ def load_precomputed_joints(det_df, seq_info_dict, keypoint_model, use_cuda):
     joints = joints.reshape((-1, 17, 4))
 
     joints = joints[:, :, 1:]
+
 
     return joints.to(torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu"))
