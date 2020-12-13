@@ -6,6 +6,7 @@ import pandas as pd
 from torch_geometric.data import DataLoader
 
 import torch
+from torch.autograd import Variable
 
 from torch import optim as optim_module
 from torch.optim import lr_scheduler as lr_sched_module
@@ -92,23 +93,43 @@ class MOTNeuralSolver(pl.LightningModule):
             return optimizer
 
     def _compute_loss(self, outputs, batch):
-        # Define Balancing weight
-        positive_vals = batch.edge_labels.sum()
+        if self.hparams['train_params']['loss'] is None or self.hparams['train_params']['loss']['type'] == 'BCE':
+            # Define Balancing weight
+            positive_vals = batch.edge_labels.sum()
 
-        if positive_vals:
-            pos_weight = (batch.edge_labels.shape[0] - positive_vals) / positive_vals
+            if positive_vals:
+                pos_weight = (batch.edge_labels.shape[0] - positive_vals) / positive_vals
 
-        else: # If there are no positives labels, avoid dividing by zero
-            pos_weight = 0
+            else: # If there are no positives labels, avoid dividing by zero
+                pos_weight = 0
 
-        # Compute Weighted BCE:
-        loss = 0
-        num_steps = len(outputs['classified_edges'])
-        for step in range(num_steps):
-            loss += F.binary_cross_entropy_with_logits(outputs['classified_edges'][step].view(-1),
-                                                            batch.edge_labels.view(-1),
-                                                            pos_weight= pos_weight)
-        return loss
+            # Compute Weighted BCE:
+            loss = 0
+            num_steps = len(outputs['classified_edges'])
+            for step in range(num_steps):
+                loss += F.binary_cross_entropy_with_logits(outputs['classified_edges'][step].view(-1),
+                                                                batch.edge_labels.view(-1),
+                                                                pos_weight= pos_weight)
+
+            return loss
+        elif self.hparams['train_params']['loss']['type'] == 'Focal':
+            alpha = self.hparams['train_params']['loss']['args']['alpha']
+
+            loss = 0
+            num_steps = len(outputs['classified_edges'])
+            for step in range(num_steps):
+                x = outputs['classified_edges'][step].view(-1)
+                t = Variable(batch.edge_labels.view(-1)).cuda()
+
+                xt = x*(2*t-1)  # xt = x if t > 0 else -x
+                pt = (2*xt+1).sigmoid()
+
+                w = alpha*t + (1-alpha)*(1-t)
+                loss += (-w*pt.log() / 2).sum()
+
+            return loss
+        else:
+            raise Exception(f'Loss {self.hparams["train_params"]["loss"]} unknown')
 
     def _train_val_step(self, batch, batch_idx, train_val):
         device = (next(self.model.parameters())).device
