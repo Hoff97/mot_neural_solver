@@ -16,6 +16,7 @@ import pytorch_lightning as pl
 
 from mot_neural_solver.data.mot_graph_dataset import MOTGraphDataset
 from mot_neural_solver.models.mpn import MOTMPNet
+from mot_neural_solver.models.combined.mp import MOTMPNet as CombinedMOTMPNet
 from mot_neural_solver.models.resnet import resnet50_fc256, load_pretrained_weights
 from mot_neural_solver.path_cfg import OUTPUT_PATH
 from mot_neural_solver.utils.evaluation import compute_perform_metrics
@@ -33,13 +34,17 @@ class MOTNeuralSolver(pl.LightningModule):
 
         self.hparams = hparams
         self.model, self.cnn_model = self.load_model()
-    
+
     def forward(self, x):
         self.model(x)
 
     def load_model(self):
         cnn_arch = self.hparams['graph_model_params']['cnn_params']['arch']
-        model =  MOTMPNet(self.hparams['graph_model_params']).cuda()
+
+        if 'multi' not in self.hparams['graph_model_params'] or not self.hparams['graph_model_params']['multi']:
+            model =  MOTMPNet(self.hparams['graph_model_params']).cuda()
+        else:
+            model = CombinedMOTMPNet(self.hparams['graph_model_params']).cuda()
 
         cnn_model = resnet50_fc256(10, loss='xent', pretrained=True).cuda()
         load_pretrained_weights(cnn_model,
