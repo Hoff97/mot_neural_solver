@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from mot_neural_solver.models.combined.message_model import MessageModel
 from mot_neural_solver.models.combined.meta_layer import MetaLayer
 from mot_neural_solver.models.combined.mlp import MLPGraphIndependent
 
@@ -77,18 +78,21 @@ class MOTMPNet(nn.Module):
         edge_models_in_dim = {}
         for i, tpe1 in enumerate(self.node_types):
             for tpe2 in self.node_types[i:]:
+                key = f'{tpe1}-{tpe2}'
                 node_dim = node_factor * (encoder_feats_dict['node_out_dims'][tpe1] + encoder_feats_dict['node_out_dims'][tpe2])
-                edge_dim = edge_factor * encoder_feats_dict['edge_out_dims'][(tpe1, tpe2)]
-                edge_models_in_dim[(tpe1, tpe2)] = node_dim + edge_dim
+                edge_dim = edge_factor * encoder_feats_dict['edge_out_dims'][key]
+                edge_models_in_dim[key] = node_dim + edge_dim
 
         node_models_in_dim = {}
-        for i, tpe in self.node_types:
+        for i, tpe in enumerate(self.node_types):
             node_dim = node_factor * encoder_feats_dict['node_out_dims'][tpe]
             edge_dim = 0
             for tpe2 in self.node_types[:i]:
-                edge_dim += encoder_feats_dict['edge_out_dims'][(tpe2, tpe)]
+                key = f'{tpe2}-{tpe}'
+                edge_dim += encoder_feats_dict['edge_out_dims'][key]
             for tpe2 in self.node_types[i:]:
-                edge_dim += encoder_feats_dict['edge_out_dims'][(tpe, tpe2)]
+                key = f'{tpe}-{tpe2}'
+                edge_dim += encoder_feats_dict['edge_out_dims'][key]
             node_models_in_dim[tpe] = node_dim + edge_dim
 
         # Define all MLPs used within the MPN
@@ -98,41 +102,40 @@ class MOTMPNet(nn.Module):
         edge_models = {}
         for i, tpe1 in enumerate(self.node_types):
             for tpe2 in self.node_types[i:]:
+                key = f'{tpe1}-{tpe2}'
                 # The fc_dims are different for every type of node combination
                 # while dropout and batchnorm are either used for all or none
                 # of the MLPs
-                mlp = MLP(input_dim=edge_models_in_dim[(tpe1, tpe2)],
-                          fc_dims=edge_model_feats_dict['fc_dims'][(tpe1, tpe2)],
+                mlp = MLP(input_dim=edge_models_in_dim[key],
+                          fc_dims=edge_model_feats_dict['fc_dims'][key],
                           dropout_p=edge_model_feats_dict['dropout_p'],
                           use_batchnorm=edge_model_feats_dict['use_batchnorm'])
                 edge_model = EdgeModel(edge_mlp=mlp)
-                edge_models[(tpe1, tpe2)] = edge_model
+                edge_models[key] = edge_model
 
         node_models = {}
         for tpe in self.node_types:
+            node_type_config = node_model_feats_dict[tpe]
+
             message_modules = {}
             for tpe2 in self.node_types:
-                pass
+                mlp = MLP(**node_type_config['message_modules'][tpe2])
+                # TODO: Enable use of time aware MP layer here
+                message_module = MessageModel(mlp, node_agg_fn)
+                message_modules[tpe2] = message_module
 
-            # TODO: Specify update parameters
-            update_module = MLP()
+            update_module = MLP(**node_type_config['update_mlp'])
 
             node_type_model = NodeTypeModel(message_modules,
                                             update_module,
                                             tpe,
                                             self.node_types)
-        # TODO: Here the node_type_models have to be defined
-        # A node_type_model has multiple message generation models
-        # - one for each incoming edge type
-        # One message generation model:
-        # - Aggregate over all incoming message of the respective edge type
-        # - Can be either a simple node message model (TODO: Yet to write)
-        #   Or it is a TimeAwareNodeModel (probably will only be used for the intra-node-message
-        #   ie the messages passed between nodes of the same type)
+            node_models[tpe] = node_type_model
 
         # Define all MLPs used within the MPN
         return MetaLayer(edge_models=edge_models,
-                         node_models=node_models)
+                         node_type_models=node_models,
+                         node_types=self.node_types)
 
 
     def forward(self, data):
@@ -143,8 +146,9 @@ class MOTMPNet(nn.Module):
         classified independently by the classifiernetwork.
         Args:
             data: object containing attribues
-              - x: node features matrix
-              - edge_index: tensor with shape [2, M], with M being the number of edges, indicating nonzero entries in the
+              - x: node features matrix for each node type
+              - edge_index: for each edge type:
+                tensor with shape [2, M], with M being the number of edges, indicating nonzero entries in the
                 graph adjacency (i.e. edges) (i.e. sparse adjacency)
               - edge_attr: edge features matrix (sorted by edge apperance in edge_index)
 
@@ -152,13 +156,6 @@ class MOTMPNet(nn.Module):
             classified_edges: list of unnormalized node probabilites after each MP step
         """
         x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
-
-        x_is_img = len(x.shape) == 4
-        if self.node_cnn is not None and x_is_img:
-            x = self.node_cnn(x)
-
-            emb_dists = nn.functional.pairwise_distance(x[edge_index[0]], x[edge_index[1]]).view(-1, 1)
-            edge_attr = torch.cat((edge_attr, emb_dists), dim = 1)
 
         # Encoding features step
         latent_edge_feats, latent_node_feats = self.encoder(edge_attr, x)
@@ -173,8 +170,10 @@ class MOTMPNet(nn.Module):
 
             # Reattach the initially encoded embeddings before the update
             if self.reattach_initial_edges:
+                # TODO: Reattach edges for each edge type individually
                 latent_edge_feats = torch.cat((initial_edge_feats, latent_edge_feats), dim=1)
             if self.reattach_initial_nodes:
+                # TODO: Reattach nodes for each node type individually
                 latent_node_feats = torch.cat((initial_node_feats, latent_node_feats), dim=1)
 
             # Message Passing Step

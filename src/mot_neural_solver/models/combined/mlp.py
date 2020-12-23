@@ -37,6 +37,8 @@ class MLPGraphIndependent(nn.Module):
                     mlp = MLP(input_dim=node_in_dims[tpe], fc_dims=list(node_fc_dims[tpe]) + [node_out_dims[tpe]],
                             dropout_p=dropout_p, use_batchnorm=use_batchnorm)
                     self.node_mlps[tpe] = mlp
+
+            self.node_mlps = nn.ModuleDict(self.node_mlps)
         else:
             self.node_mlps = None
 
@@ -44,11 +46,13 @@ class MLPGraphIndependent(nn.Module):
             self.edge_mlps = {}
             for i, tpe1 in enumerate(node_types):
                 for tpe2 in node_types[i:]:
-                    if (tpe1, tpe2) in edge_in_dims:
-                        mlp = MLP(input_dim=edge_in_dims[(tpe1, tpe2)],
-                                fc_dims=list(edge_fc_dims[(tpe1, tpe2)]) + [edge_out_dims[(tpe1, tpe2)]],
+                    key = f'{tpe1}-{tpe2}'
+                    if key in edge_in_dims:
+                        mlp = MLP(input_dim=edge_in_dims[key],
+                                fc_dims=list(edge_fc_dims[key]) + [edge_out_dims[key]],
                                 dropout_p=dropout_p, use_batchnorm=use_batchnorm)
-                        self.edge_mlps[(tpe1, tpe2)] = mlp
+                        self.edge_mlps[key] = mlp
+            self.edge_mlps = nn.ModuleDict(self.edge_mlps)
         else:
             self.edge_mlps = None
 
@@ -68,8 +72,9 @@ class MLPGraphIndependent(nn.Module):
             out_edge_feats = {}
             for i, tpe1 in enumerate(self.node_types):
                 for tpe2 in self.node_types[i:]:
-                    if (tpe1, tpe2) in self.edge_mlps and (tpe1, tpe2) in edge_feats:
-                        out_edge_feats[(tpe1, tpe2)] = self.edge_mlps[(tpe1, tpe2)](edge_feats[(tpe1, tpe2)])
+                    key = f'{tpe1}-{tpe2}'
+                    if key in self.edge_mlps and key in edge_feats:
+                        out_edge_feats[key] = self.edge_mlps[key](edge_feats[key])
         else:
             out_edge_feats = edge_feats
 

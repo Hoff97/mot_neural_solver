@@ -3,4 +3,4 @@ from typing import Tuple
 
 NodeType = str
 
-EdgeType = Tuple[NodeType, NodeType]
+EdgeType = str # Of format NodeType-NodeType

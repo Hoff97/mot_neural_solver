@@ -15,7 +15,7 @@ class NodeTypeModel(nn.Module):
                  node_types: List[NodeType]):
         super(NodeTypeModel, self).__init__()
 
-        self.message_models = message_models
+        self.message_models = torch.nn.ModuleDict(message_models)
         self.update_model = update_model
         self.node_type = node_type
         self.node_types = node_types
