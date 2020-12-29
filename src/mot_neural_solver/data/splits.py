@@ -77,6 +77,3 @@ _SPLITS['mot20_test'] = {'MOT20/test': [f'MOT20-{seq_num:02}' for seq_num in (4,
 _SPLITS['all_train'] = {**_SPLITS['mot17_train_gt'], **_SPLITS['mot15_train_gt'], **_SPLITS['mot20_train_gt']}
 _SPLITS['all_test'] = {**_SPLITS['mot17_test'], **_SPLITS['mot15_test'], **_SPLITS['mot20_test']}
 
-
-
-
