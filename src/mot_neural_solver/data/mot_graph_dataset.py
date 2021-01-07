@@ -1,14 +1,14 @@
 import os.path as osp
+import random
 
 import numpy as np
 import pandas as pd
-
-from mot_neural_solver.path_cfg import  DATA_PATH
-from mot_neural_solver.data.splits import _SPLITS
 from mot_neural_solver.data.mot_graph import MOTGraph
+from mot_neural_solver.data.multi_partite_graph import MultiMOTGraph
 from mot_neural_solver.data.seq_processing.seq_processor import MOTSeqProcessor
+from mot_neural_solver.data.splits import _SPLITS
+from mot_neural_solver.path_cfg import DATA_PATH
 
-import random
 
 class MOTGraphDataset:
     """
@@ -18,19 +18,22 @@ class MOTGraphDataset:
     Its main method is 'get_from_frame_and_seq', where given sequence name and a starting frame position, a graph is
     returned.
     """
-    def __init__(self, dataset_params, mode, splits, logger = None, cnn_model = None):
-        assert mode in ('train', 'val', 'test')
+
+    def __init__(self, dataset_params, mode, splits, logger=None, cnn_model=None):
+        assert mode in ("train", "val", "test")
         self.dataset_params = dataset_params
-        self.mode = mode # Can be either 'train', 'val' or 'test'
+        self.mode = mode  # Can be either 'train', 'val' or 'test'
         self.logger = logger
-        self.augment = self.dataset_params['augment'] and mode == 'train'
+        self.augment = self.dataset_params["augment"] and mode == "train"
 
         self.cnn_model = cnn_model
 
         seqs_to_retrieve = self._get_seqs_to_retrieve_from_splits(splits)
 
         # Load all dataframes containing detection information in each sequence of the dataset
-        self.seq_det_dfs, self.seq_info_dicts, self.seq_names = self._load_seq_dfs(seqs_to_retrieve)
+        self.seq_det_dfs, self.seq_info_dicts, self.seq_names = self._load_seq_dfs(
+            seqs_to_retrieve
+        )
 
         if self.seq_names:
             # Update each sequence's meatinfo with step sizes
@@ -50,11 +53,13 @@ class MOTGraphDataset:
 
         seqs_to_retrieve = {}
         for split_name in splits:
-            #seqs_path, seq_list = _SPLITS[split_name]
+            # seqs_path, seq_list = _SPLITS[split_name]
             # seqs_to_retrieve[osp.join(DATA_PATH, seqs_path)] = seq_list
-            seqs = {osp.join(DATA_PATH, seqs_path): seq_list for seqs_path, seq_list in  _SPLITS[split_name].items()}
+            seqs = {
+                osp.join(DATA_PATH, seqs_path): seq_list
+                for seqs_path, seq_list in _SPLITS[split_name].items()
+            }
             seqs_to_retrieve.update(seqs)
-
 
         return seqs_to_retrieve
 
@@ -76,14 +81,20 @@ class MOTGraphDataset:
         for dataset_path, seq_list in seqs_to_retrieve.items():
             for seq_name in seq_list:
 
-                seq_processor = MOTSeqProcessor(dataset_path=dataset_path, seq_name=seq_name,
-                                                dataset_params=self.dataset_params, cnn_model=self.cnn_model,
-                                                logger=self.logger)
+                seq_processor = MOTSeqProcessor(
+                    dataset_path=dataset_path,
+                    seq_name=seq_name,
+                    dataset_params=self.dataset_params,
+                    cnn_model=self.cnn_model,
+                    logger=self.logger,
+                )
                 seq_det_df = seq_processor.load_or_process_detections()
 
                 # If we are dealing with ground truth and we visibility score, filter our detections that are not visible
-                if 'vis' in seq_det_df:
-                    seq_det_df = seq_det_df[seq_det_df['vis'] > self.dataset_params['gt_training_min_vis']]
+                if "vis" in seq_det_df:
+                    seq_det_df = seq_det_df[
+                        seq_det_df["vis"] > self.dataset_params["gt_training_min_vis"]
+                    ]
 
                 seq_names.append(seq_name)
                 seq_info_dicts[seq_name] = seq_det_df.seq_info_dict
@@ -103,16 +114,16 @@ class MOTGraphDataset:
         (i.e., we process 1 out 5 frames)
         """
         for seq_name, seq_info_dict in self.seq_info_dicts.items():
-            seq_type = 'moving' if seq_info_dict['mov_camera'] else 'static'
-            target_fps= self.dataset_params['target_fps_dict'][seq_type]
-            scene_fps = seq_info_dict['fps']
+            seq_type = "moving" if seq_info_dict["mov_camera"] else "static"
+            target_fps = self.dataset_params["target_fps_dict"][seq_type]
+            scene_fps = seq_info_dict["fps"]
             if scene_fps <= target_fps:
                 step_size = 1
 
             else:
-                step_size=  round(scene_fps / target_fps)
+                step_size = round(scene_fps / target_fps)
 
-            self.seq_info_dicts[seq_name]['step_size'] = step_size
+            self.seq_info_dicts[seq_name]["step_size"] = step_size
 
     def _get_last_frame_df(self):
         """
@@ -123,25 +134,39 @@ class MOTGraphDataset:
         Returns:
             last_frame_df: dataframe containing the last valid starting frame for each sequence.
         """
-        last_graph_frame = self.dataset_params['frames_per_graph'] if self.dataset_params['frames_per_graph'] != 'max' else 1
-        min_detects = 1 if self.dataset_params['min_detects'] is None else self.dataset_params['min_detects']
+        last_graph_frame = (
+            self.dataset_params["frames_per_graph"]
+            if self.dataset_params["frames_per_graph"] != "max"
+            else 1
+        )
+        min_detects = (
+            1
+            if self.dataset_params["min_detects"] is None
+            else self.dataset_params["min_detects"]
+        )
 
         last_frame_dict = {}
         for scene in self.seq_names:
             scene_df = self.seq_det_dfs[scene]
-            scene_step_size = self.seq_info_dicts[scene]['step_size']
-            max_frame = scene_df.frame.max() - (last_graph_frame * scene_step_size)  # Maximum frame at which
-                                                                                     # we can start a graph and still
-                                                                                     # have enough frames.
-            min_detects_max_frame = scene_df.iloc[-(min_detects * scene_step_size)]['frame'] # Maximum frame at which
-                                                                                             # we cans start a graph
-                                                                                             # and still have enough dets.
+            scene_step_size = self.seq_info_dicts[scene]["step_size"]
+            max_frame = scene_df.frame.max() - (
+                last_graph_frame * scene_step_size
+            )  # Maximum frame at which
+            # we can start a graph and still
+            # have enough frames.
+            min_detects_max_frame = scene_df.iloc[-(min_detects * scene_step_size)][
+                "frame"
+            ]  # Maximum frame at which
+            # we cans start a graph
+            # and still have enough dets.
             max_frame = min(max_frame, min_detects_max_frame)
             last_frame_dict[scene] = max_frame
 
         # Create a dataframe with the result
-        last_frame_df = pd.DataFrame().from_dict(last_frame_dict, orient='index')
-        last_frame_df = last_frame_df.reset_index().rename(columns={'index': 'seq_name', 0: 'last_frame'})
+        last_frame_df = pd.DataFrame().from_dict(last_frame_dict, orient="index")
+        last_frame_df = last_frame_df.reset_index().rename(
+            columns={"index": "seq_name", 0: "last_frame"}
+        )
 
         return last_frame_df
 
@@ -157,26 +182,36 @@ class MOTGraphDataset:
         concat_seq_dfs = []
         for seq_name, det_df in self.seq_det_dfs.items():
             seq_det_df_ = det_df.copy()
-            seq_det_df_['seq_name'] = seq_name
+            seq_det_df_["seq_name"] = seq_name
             concat_seq_dfs.append(seq_det_df_)
 
         concat_seq_dfs = pd.concat(concat_seq_dfs, sort=False)
 
         # Get all valid (seq_name, starting_frame) pairs
-        seq_frame_pairs = concat_seq_dfs[['seq_name', 'frame']].drop_duplicates()
+        seq_frame_pairs = concat_seq_dfs[["seq_name", "frame"]].drop_duplicates()
         last_frame_df = self._get_last_frame_df()
-        index_df = seq_frame_pairs.merge(last_frame_df, on = 'seq_name')
-        index_df = index_df[index_df['frame']<=index_df['last_frame']]
+        index_df = seq_frame_pairs.merge(last_frame_df, on="seq_name")
+        index_df = index_df[index_df["frame"] <= index_df["last_frame"]]
 
         # Create a tuples with pairs (scene, starting_frame), that will be used to know which pair corresponds to each ix
-        seq_frame_ixs = list((tuple(seq_frame) for seq_frame in index_df[['seq_name', 'frame']].values))
+        seq_frame_ixs = list(
+            (tuple(seq_frame) for seq_frame in index_df[["seq_name", "frame"]].values)
+        )
 
         # Shuffle ixs to ensure that if we only sample a subset of the dataloader, we still sample different seqs
-        #random.shuffle(seq_frame_ixs)
+        # random.shuffle(seq_frame_ixs)
         return seq_frame_ixs
 
-    def get_from_frame_and_seq(self, seq_name, start_frame, max_frame_dist, end_frame = None, ensure_end_is_in = False,
-                               return_full_object = False, inference_mode =False):
+    def get_from_frame_and_seq(
+        self,
+        seq_name,
+        start_frame,
+        max_frame_dist,
+        end_frame=None,
+        ensure_end_is_in=False,
+        return_full_object=False,
+        inference_mode=False,
+    ):
         """
         Method behind __getitem__ method. We load a graph object of the given sequence name, starting at 'start_frame'.
 
@@ -193,31 +228,43 @@ class MOTGraphDataset:
 
         """
         seq_det_df = self.seq_det_dfs[seq_name]
-        seq_info_dict= self.seq_info_dicts[seq_name]
-        seq_step_size = self.seq_info_dicts[seq_name]['step_size']
+        seq_info_dict = self.seq_info_dicts[seq_name]
+        seq_step_size = self.seq_info_dicts[seq_name]["step_size"]
 
         # If doing data augmentation, randomly change the fps rate at which the scene is processed
-        if self.mode == 'train' and self.augment and seq_step_size > 1:
-            if np.random.rand() < self.dataset_params['p_change_fps_step']:
-                seq_step_size = np.round(seq_step_size*(0.5 + np.random.rand())).astype(int)
+        if self.mode == "train" and self.augment and seq_step_size > 1:
+            if np.random.rand() < self.dataset_params["p_change_fps_step"]:
+                seq_step_size = np.round(
+                    seq_step_size * (0.5 + np.random.rand())
+                ).astype(int)
 
-        mot_graph = MOTGraph(dataset_params=self.dataset_params,
-                             seq_info_dict= seq_info_dict,
-                             seq_det_df=seq_det_df,
-                             step_size=seq_step_size,
-                             start_frame=start_frame,
-                             end_frame=end_frame,
-                             ensure_end_is_in=ensure_end_is_in,
-                             max_frame_dist = max_frame_dist,
-                             cnn_model = self.cnn_model,
-                             inference_mode=inference_mode)
+        graph_class = MOTGraph
 
-        if self.mode == 'train' and self.augment:
+        if (
+            "combined_graph" in self.dataset_params
+            and self.dataset_params["combined_graph"]
+        ):
+            graph_class = MultiMOTGraph
+
+        mot_graph = graph_class(
+            dataset_params=self.dataset_params,
+            seq_info_dict=seq_info_dict,
+            seq_det_df=seq_det_df,
+            step_size=seq_step_size,
+            start_frame=start_frame,
+            end_frame=end_frame,
+            ensure_end_is_in=ensure_end_is_in,
+            max_frame_dist=max_frame_dist,
+            cnn_model=self.cnn_model,
+            inference_mode=inference_mode,
+        )
+
+        if self.mode == "train" and self.augment:
             mot_graph.augment()
 
         # Construct the Graph Network's input
         mot_graph.construct_graph_object()
-        if self.mode in ('train', 'val'):
+        if self.mode in ("train", "val"):
             mot_graph.assign_edge_labels()
 
         if return_full_object:
@@ -227,14 +274,20 @@ class MOTGraphDataset:
             return mot_graph.graph_obj
 
     def __len__(self):
-        return len(self.seq_frame_ixs) if hasattr(self, 'seq_names') and self.seq_names else 0
+        return (
+            len(self.seq_frame_ixs)
+            if hasattr(self, "seq_names") and self.seq_names
+            else 0
+        )
 
     def __getitem__(self, ix):
         seq_name, start_frame = self.seq_frame_ixs[ix]
-        return self.get_from_frame_and_seq(seq_name= seq_name,
-                                           start_frame = start_frame,
-                                           end_frame=None,
-                                           ensure_end_is_in=False,
-                                           return_full_object=False,
-                                           inference_mode=False,
-                                           max_frame_dist=self.dataset_params['max_frame_dist'])
+        return self.get_from_frame_and_seq(
+            seq_name=seq_name,
+            start_frame=start_frame,
+            end_frame=None,
+            ensure_end_is_in=False,
+            return_full_object=False,
+            inference_mode=False,
+            max_frame_dist=self.dataset_params["max_frame_dist"],
+        )
