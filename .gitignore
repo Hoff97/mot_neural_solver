@@ -1,4 +1,6 @@
+data
 data/
+output
 output/
 configs/path_cfg.py
 logs/
