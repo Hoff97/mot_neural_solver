@@ -164,10 +164,10 @@ graph_model_params:
       joint: 3
     node_fc_dims:
       bb: [128]
-      joint: [16]
+      joint: []
     node_out_dims:
       bb: 32
-      joint: 8
+      joint: 0
     dropout_p: 0
     use_batchnorm: False
 
@@ -188,30 +188,30 @@ graph_model_params:
             dropout_p: 0
             use_batchnorm: False
         joint:
-          input_dim: 8
-          fc_dims: [16, 8]
+          input_dim: 0
+          fc_dims: []
           dropout_p: 0
           use_batchnorm: False
       update_mlp:
-        input_dim: 40
-        fc_dims: [56, 32]
+        input_dim: 64
+        fc_dims: [32]
         dropout_p: 0
         use_batchnorm: False
     joint:
       message_modules:
         bb:
           input_dim: 32
-          fc_dims: [16, 16]
+          fc_dims: [0]
           dropout_p: 0
           use_batchnorm: False
         joint:
-          input_dim: 8
-          fc_dims: [8, 8]
+          input_dim: 0
+          fc_dims: []
           dropout_p: 0
           use_batchnorm: False
       update_mlp:
-        input_dim: 24
-        fc_dims: [12, 8]
+        input_dim: 0
+        fc_dims: []
         dropout_p: 0
         use_batchnorm: False
 

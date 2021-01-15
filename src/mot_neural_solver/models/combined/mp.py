@@ -5,6 +5,9 @@ from mot_neural_solver.models.combined.message_model import MessageModel
 from mot_neural_solver.models.combined.meta_layer import MetaLayer
 from mot_neural_solver.models.combined.mlp import MLPGraphIndependent
 from mot_neural_solver.models.combined.node_type_model import NodeTypeModel
+from mot_neural_solver.models.combined.time_aware_message_model import (
+    TimeAwareMessageModel,
+)
 from mot_neural_solver.models.mlp import MLP
 from mot_neural_solver.models.mpn import EdgeModel
 from torch import nn
@@ -138,10 +141,22 @@ class MOTMPNet(nn.Module):
 
             message_modules = {}
             for tpe2 in self.node_types:
-                mlp = MLP(**node_type_config["message_modules"][tpe2])
-                # TODO: Enable use of time aware MP layer here
-                message_module = MessageModel(mlp, node_agg_fn)
-                message_modules[tpe2] = message_module
+                if "time_aware" in node_type_config["message_modules"][tpe2]:
+                    flow_in_mlp = MLP(
+                        **node_type_config["message_modules"][tpe2]["time_aware"]
+                    )
+                    flow_out_mlp = MLP(
+                        **node_type_config["message_modules"][tpe2]["time_aware"]
+                    )
+                    message_module = TimeAwareMessageModel(
+                        flow_in_mlp, flow_out_mlp, node_agg_fn
+                    )
+                    message_modules[tpe2] = message_module
+                else:
+                    mlp = MLP(**node_type_config["message_modules"][tpe2])
+                    # TODO: Enable use of time aware MP layer here
+                    message_module = MessageModel(mlp, node_agg_fn)
+                    message_modules[tpe2] = message_module
 
             update_module = MLP(**node_type_config["update_mlp"])
 
