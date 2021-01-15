@@ -160,8 +160,12 @@ class MOTMPNet(nn.Module):
 
             update_module = MLP(**node_type_config["update_mlp"])
 
+            args = {}
+            if "args" in node_type_config:
+                args = node_type_config["args"]
+
             node_type_model = NodeTypeModel(
-                message_modules, update_module, tpe, self.node_types
+                message_modules, update_module, tpe, self.node_types, **args
             )
             node_models[tpe] = node_type_model
 

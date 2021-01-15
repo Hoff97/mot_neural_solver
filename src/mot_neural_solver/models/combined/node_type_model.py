@@ -16,6 +16,7 @@ class NodeTypeModel(nn.Module):
         update_model: torch.nn.Module,
         node_type: NodeType,
         node_types: List[NodeType],
+        append_self: bool = False,
     ):
         super(NodeTypeModel, self).__init__()
 
@@ -24,6 +25,7 @@ class NodeTypeModel(nn.Module):
         self.node_type = node_type
         self.node_types = node_types
         self.node_type_ix = self.node_types.index(self.node_type)
+        self.append_self = append_self
 
     def forward(self, x, xs, edge_indexs, edge_attrs):
         messages = []
@@ -38,6 +40,9 @@ class NodeTypeModel(nn.Module):
 
             message = self.message_models[tpe](x, x_in, edge_indices, attrs)
             messages.append(message)
+
+        if self.append_self:
+            messages.append(x)
 
         input = torch.cat(messages, dim=1)
         output = self.update_model(input)
