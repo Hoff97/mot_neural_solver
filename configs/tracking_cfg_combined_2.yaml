@@ -209,11 +209,11 @@ graph_model_params:
           use_batchnorm: False
         joint:
           input_dim: 8
-          fc_dims: [0]
+          fc_dims: [8]
           dropout_p: 0
           use_batchnorm: False
       update_mlp:
-        input_dim: 24
+        input_dim: 32
         fc_dims: [16, 8]
         dropout_p: 0
         use_batchnorm: False
