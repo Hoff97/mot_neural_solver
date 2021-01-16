@@ -21,6 +21,13 @@ train_params:
   save_epoch_start: 1 # If the arg above is set to True, determines the first epoch after which we start saving ckpts
   tensorboard: True
 
+# Parameter search --> values of e.g. grid_search must be unique keys in this config file
+parameter_search: grid_search
+grid_search:
+  num_epochs: [7]
+  lr: [0.001, 0.005, 0.0001, 0.0005]
+  batch_size: [32]
+
 dataset_params:
   # define which model to use for joint detection (don't forget to rename the directory)
   debug: False # whether the dataset is being debugged (shows bounding box windows, keypoints etc.)

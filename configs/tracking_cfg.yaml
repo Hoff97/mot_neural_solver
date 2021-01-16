@@ -19,17 +19,22 @@ train_params:
   save_epoch_start: 1 # If the arg above is set to True, determines the first epoch after which we start saving ckpts
   tensorboard: False
 
+parameter_search: False
+
 dataset_params:
   # define which model to use for joint detection (don't forget to rename the directory)
-  keypoint_detection_model: mmpose_keypoint_resnet101 #keypointrcnn_resnet50
+  debug: False # whether the dataset is being debugged (shows bounding box windows, keypoints etc.)
+  keypoint_detection_model: keypointrcnn_resnet50
   joints_dir: joints_keypointrcnn_torchvision
+
+  combined_graph: False
 
   # Dataset Processing params:
   precomputed_embeddings: True # Determines whether CNN embeddings for nodes and reid are computed once, stored, and
                                # then loaded when needed (True) or compute every time they are neede
   overwrite_processed_data: False # If True, sequence detects are processed again, and previous data is overwritten
                                   # (GT assignment, precomp embeddings (if they exist), processed dets file
-  overwrite_joints: True # Like above, but for the joint detections
+  overwrite_joints: False # Like above, but for the joint detections
   precomputed_joints: True # Determines wether the joints per BB should be preprocessed
   det_file_name: tracktor_prepr_det # Name of the detections file used for val/test (matches the one created in preprocessing (see preprocessing.yaml)
                                     # e.g. change it for frcnn_prepr_det if not using tracktor for preprocessing
