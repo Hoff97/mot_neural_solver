@@ -549,9 +549,10 @@ class MOTSeqProcessor:
                 with_batch[:, 1:] = coords
                 with_batch[:, 0] = 0
 
-                feature_maps = self.cnn_model.get_feature_maps(
-                    frame[0].cuda().unsqueeze(dim=0)
-                )
+                with torch.no_grad():
+                    feature_maps = self.cnn_model.get_feature_maps(
+                        frame[0].cuda().unsqueeze(dim=0)
+                    )
 
                 scaling_y = frame[0].shape[1] / feature_maps.shape[2]
                 scaling_x = frame[0].shape[2] / feature_maps.shape[3]
