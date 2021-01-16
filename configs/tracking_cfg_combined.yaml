@@ -35,7 +35,7 @@ dataset_params:
   overwrite_processed_data:
     False # If True, sequence detects are processed again, and previous data is overwritten
     # (GT assignment, precomp embeddings (if they exist), processed dets file
-  overwrite_joints: False # Like above, but for the joint detections
+  overwrite_joints: True # Like above, but for the joint detections
   precomputed_joints: True # Determines wether the joints per BB should be preprocessed
   det_file_name:
     tracktor_prepr_det # Name of the detections file used for val/test (matches the one created in preprocessing (see preprocessing.yaml)
@@ -87,7 +87,11 @@ dataset_params:
     - bb_width_dists
     # ReID Score
     - emb_dist
-  node_feats_to_use: []
+  node_feats_to_use:
+    - bb_positions
+
+  joint_features:
+    - emb
 
   target_fps_dict: # Frame sampling rate for sequences with static/moving camera
     moving: 9
@@ -160,11 +164,11 @@ graph_model_params:
       bb-joint: 0
       joint-joint: 0
     node_in_dims:
-      bb: 2048
+      bb: 2052
       joint: 3
     node_fc_dims:
       bb: [128]
-      joint: [16]
+      joint: [8]
     node_out_dims:
       bb: 32
       joint: 8
@@ -189,31 +193,36 @@ graph_model_params:
             use_batchnorm: False
         joint:
           input_dim: 8
-          fc_dims: [16, 8]
+          fc_dims: [8]
           dropout_p: 0
           use_batchnorm: False
       update_mlp:
-        input_dim: 40
-        fc_dims: [56, 32]
+        input_dim: 104
+        fc_dims: [32]
         dropout_p: 0
         use_batchnorm: False
+      args:
+        append_self: True
     joint:
       message_modules:
         bb:
           input_dim: 32
-          fc_dims: [16, 16]
+          fc_dims: [16]
           dropout_p: 0
           use_batchnorm: False
         joint:
-          input_dim: 8
-          fc_dims: [8, 8]
-          dropout_p: 0
-          use_batchnorm: False
+          time_aware:
+            input_dim: 8
+            fc_dims: [8]
+            dropout_p: 0
+            use_batchnorm: False
       update_mlp:
-        input_dim: 24
-        fc_dims: [12, 8]
+        input_dim: 40
+        fc_dims: [16, 8]
         dropout_p: 0
         use_batchnorm: False
+      args:
+        append_self: True
 
   classifier_feats_dict:
     edge_in_dims:
