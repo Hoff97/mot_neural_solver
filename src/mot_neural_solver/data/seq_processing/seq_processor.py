@@ -732,7 +732,7 @@ class MOTSeqProcessor:
             seq_det_df = self.process_detections()
 
         joints_ok = (
-            osp.exists(joints_path) and len(os.listdir(joints_path)) == num_frames
+            osp.exists(joints_path) and len(os.listdir(joints_path)) == 2 * num_frames
         )
         if not joints_ok or self.dataset_params["overwrite_joints"]:
             self.process_joints(joints_path)

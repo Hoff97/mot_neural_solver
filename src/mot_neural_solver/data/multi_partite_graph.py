@@ -95,7 +95,9 @@ class MultiMOTGraph(MOTGraph):
         edge_indices["bb-bb"] = graph_obj.edge_index
         xs["bb"] = graph_obj.x
 
-        xs["joint"] = joints.reshape((-1, 3))
+        joint_feature_dim = joints.shape[2]
+
+        xs["joint"] = joints.reshape((-1, joint_feature_dim))
 
         num_bb = xs["bb"].shape[0]
         num_joints_per_bb = joints.shape[1]

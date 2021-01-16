@@ -233,11 +233,17 @@ class MOTGraph(object):
                 self.inference_mode,
             )
         else:
+            load_embeds = (
+                "joint_features" in self.dataset_params
+                and "emb" in self.dataset_params["joint_features"]
+            )
+
             return load_precomputed_joints(
                 self.graph_df,
                 self.seq_info_dict,
                 self.dataset_params["keypoint_detection_model"],
                 self.inference_mode,
+                load_embeds,
             )
 
     def _get_edge_ixs(self, reid_embeddings):

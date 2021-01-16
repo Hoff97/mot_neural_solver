@@ -1,6 +1,6 @@
 ckpt_path: trained_models/graph_nets/mot_mpnet_epoch_006.ckpt
 train_params:
-  batch_size: 6 # default: 8
+  batch_size: 4 # default: 8
   num_epochs: 20
   optimizer:
     type: Adam
@@ -35,7 +35,7 @@ dataset_params:
   overwrite_processed_data:
     False # If True, sequence detects are processed again, and previous data is overwritten
     # (GT assignment, precomp embeddings (if they exist), processed dets file
-  overwrite_joints: True # Like above, but for the joint detections
+  overwrite_joints: False # Like above, but for the joint detections
   precomputed_joints: True # Determines wether the joints per BB should be preprocessed
   det_file_name:
     tracktor_prepr_det # Name of the detections file used for val/test (matches the one created in preprocessing (see preprocessing.yaml)
@@ -165,13 +165,13 @@ graph_model_params:
       joint-joint: 0
     node_in_dims:
       bb: 2052
-      joint: 3
+      joint: 2051
     node_fc_dims:
       bb: [128]
-      joint: [8]
+      joint: [128]
     node_out_dims:
       bb: 32
-      joint: 8
+      joint: 32
     dropout_p: 0
     use_batchnorm: False
 
@@ -192,13 +192,13 @@ graph_model_params:
             dropout_p: 0
             use_batchnorm: False
         joint:
-          input_dim: 8
-          fc_dims: [8]
+          input_dim: 32
+          fc_dims: [24, 16]
           dropout_p: 0
           use_batchnorm: False
       update_mlp:
-        input_dim: 104
-        fc_dims: [32]
+        input_dim: 112 # 3*BB-size + joint-size
+        fc_dims: [64, 32]
         dropout_p: 0
         use_batchnorm: False
       args:
@@ -212,13 +212,13 @@ graph_model_params:
           use_batchnorm: False
         joint:
           time_aware:
-            input_dim: 8
-            fc_dims: [8]
+            input_dim: 32
+            fc_dims: [16]
             dropout_p: 0
             use_batchnorm: False
       update_mlp:
-        input_dim: 40
-        fc_dims: [16, 8]
+        input_dim: 80
+        fc_dims: [64, 32]
         dropout_p: 0
         use_batchnorm: False
       args:
