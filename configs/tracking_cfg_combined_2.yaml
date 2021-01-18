@@ -1,17 +1,17 @@
 ckpt_path: trained_models/graph_nets/mot_mpnet_epoch_006.ckpt
 train_params:
-  batch_size: 6 # default: 8
+  batch_size: 32 # default: 8
   num_epochs: 20
   optimizer:
     type: Adam
     args:
-      lr: 0.001
+      lr: 0.003
       weight_decay: 0.0001
   loss:
     type: BCE
 
   lr_scheduler:
-    type: StepLR
+    type:
     args:
       step_size: 7
       gamma: 0.5
@@ -22,12 +22,11 @@ train_params:
   tensorboard: True
 
 # Parameter search --> values of e.g. grid_search must be unique keys in this config file
-parameter_search: grid_search
+parameter_search: False
 grid_search:
-  num_epochs: [7]
-  lr: [0.005, 0.0001, 0.0005]
+  num_epochs: [20]
+  lr: [0.005, 0.003]
   batch_size: [32]
-  gamma: [0.3, 0.5, 0.7]
 
 dataset_params:
   # define which model to use for joint detection (don't forget to rename the directory)
