@@ -1,12 +1,12 @@
 ckpt_path: trained_models/graph_nets/mot_mpnet_epoch_006.ckpt
 train_params:
   batch_size: 32 # default: 8
-  num_epochs: 20
+  num_epochs: 200
   optimizer:
     type: Adam
     args:
       lr: 0.003
-      weight_decay: 0.0001
+      weight_decay: 0.001 # default: 0.0001
   loss:
     type: BCE
 
@@ -72,7 +72,10 @@ dataset_params:
 
   # Graph Construction Parameters
   gt_training_min_vis: 0.2 # Minimum visibility score allowed in a GT box to be used for training
-  frames_per_graph: 15 # Maximum number of frames contained in each graph sampled graph
+
+  # TODO: change back to default
+  frames_per_graph: 15 # default 15 # Maximum number of frames contained in each graph sampled graph
+
   max_frame_dist:
     max # Determines the maximum distance in num of frames between two detections in a graph connected
     # by an edge (setting it to a num is dangerous, as dist in frames depends on fps...) (should use seconds instead)

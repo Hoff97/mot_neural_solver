@@ -17,7 +17,7 @@ train_params:
   num_workers: 6 # Used for dataloaders
   save_every_epoch: False # Determines if every a checkpoint will be saved for every epoch
   save_epoch_start: 1 # If the arg above is set to True, determines the first epoch after which we start saving ckpts
-  tensorboard: False
+  tensorboard: True
 
 parameter_search: False
 
