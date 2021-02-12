@@ -92,7 +92,7 @@ We made two main contributions: First, a trained baseline model, which concatena
 
 ### Baseline Model
 
-To train the baseline model, make sure that you are on `master`. You can configure the training process via `configs/tracking_cfg.yaml`.
+To train the baseline model, simply run:
 
 ```
 > python setup/train.py
@@ -100,7 +100,8 @@ To train the baseline model, make sure that you are on `master`. You can configu
 
 ### Combined Graph Model
 
-Similarly the combined graph model can be trained by switching to the `combined` branch. Configuration rests in `configs/tracking_cfg_combined.yaml`
+Similarly the combined graph model can be trained by using the configuration in `configs/tracking_cfg_combined.yaml`,
+eg. by chaning `CONFIG_FILE = "configs/tracking_cfg_combined.yaml"` in the `train.py` file.
 
 
 ```
@@ -109,16 +110,15 @@ Similarly the combined graph model can be trained by switching to the `combined`
 
 ### Combined Graph Model with joint ReID
 
-This also lies on the `combined` branch. Configuration rests in `configs/tracking_with_joints_bb.yaml`
-
+To train with Joint ReID features, uncomment these lines in `configs/tracking_cfg_combined.yaml`.
+```
+#  joint_features:
+#    - emb
+```
 
 ```
 > python setup/train.py
 ```
-
-
-
-
 
 
 

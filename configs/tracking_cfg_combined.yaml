@@ -90,8 +90,8 @@ dataset_params:
   node_feats_to_use:
     - bb_positions
 
-  joint_features:
-    - emb
+#  joint_features:
+#    - emb
 
   target_fps_dict: # Frame sampling rate for sequences with static/moving camera
     moving: 9
