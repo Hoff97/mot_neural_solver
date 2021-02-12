@@ -1,3 +1,131 @@
+# Extending MOT Neural Solber to exploit Body joints for MOT
+
+## General Setup
+
+For the general setup (data download, ReID weights etc.), please refer to the original MOT Neural solver ([here](Learning-a-Neural-Solver-for-Multiple-Object-Tracking)).
+
+## Setup
+
+### Shell Environments
+
+In the following, there will be multiple shell environments used to setup the project, each environment starts with a different character. These are explained here:
+
+- `$` - only normal environment (any user) is needed
+- `#` - root environment is needed, e.g. with `sudo`
+- `>` - virtual environment is needed, this can be accessed using `$ pipenv shell`
+
+### Virtual Environment
+
+We have used `pipenv` to setup and manage a virtual environment. To install it, make sure you have `pip` or `pip3` installed and type:
+
+```
+$ which pip3
+$ pip3 install pipenv
+```
+
+This code has been tested with 'python3' version '3.7+'. To make sure, that python versions match use `pyenv`.
+
+```
+$ which pyenv
+```
+
+If you do not have it, please install it.
+The installation process differentiates from OS to OS. E.g. for Arch Linux use:
+
+```
+# pacman -S pyenv
+```
+
+Now, setup the virtual environment and install its dependencies using:
+
+```
+$ pipenv install --python 3.7
+```
+
+This installs all dependencies for you except `pytorch`, `pytorch_lighting` and `pytorch_geometry`, since these dependencies are hardware dependent and differ from machine to machine. In our case, we used `cuda` version `10.1` and `pytorch` version `1.7.0`.
+
+### Pytorch
+
+To install pytorch, switch to the virtual environment using:
+
+```
+$ pipenv shell
+```
+
+In the following please match your `pytorch` and `cuda` versions. This example is for `cuda` version `10.1` and `pytorch` version `1.7.0`. change to different `cuda` versions by modifiying `cu101` and to different `pytorch` versions by modifying `torch-1.7.0`.
+To install `pytorch` use:
+
+```
+> pip install torch==1.7.0+cu101 torchvision==0.8.1+cu101 torchaudio==0.7.0 -f https://download.pytorch.org/whl/torch_stable.html
+```
+
+To install `pytorch_lightning` use:
+
+```
+> pip install pytorch_lightning
+```
+
+To install `pytorch_geometry` use the following commands.
+
+```
+> pip install torch-scatter==latest+cu101 -f https://pytorch-geometric.com/whl/torch-1.7.0.html
+> pip install torch-sparse==latest+cu101 -f https://pytorch-geometric.com/whl/torch-1.7.0.html
+> pip install torch-cluster==latest+cu101 -f https://pytorch-geometric.com/whl/torch-1.7.0.html
+> pip install torch-spline-conv==latest+cu101 -f https://pytorch-geometric.com/whl/torch-1.7.0.html
+> pip install torch-geometric
+```
+
+### Libraries
+
+Since our work relies mainly on TODO:CITATION and TODO:CITATION. We use their code as libraries. Both have been added as git submodules in the `./lib` directory.
+
+```
+> pip install -e lib/tracking_wo_bnw
+> pip install -e lib/mot_neural_solver
+```
+
+## Reproducing Results
+
+We made two main contributions: First, a trained baseline model, which concatenates Bounding Box joint features with the coordinates and visibility score from our joint detector to construct the graph. Our main contribution is the seperation of the two different feature sources (BBs and joints) by creating a combined graph, made up from two subgraphes (one BB and one joints graph) where each feature source is its own node. We adapted a novel message passing in between the subgraphs.
+
+![combined-graph](/pictures/Combined-Graph-final.png)
+
+### Baseline Model
+
+To train the baseline model, make sure that you are on `master`. You can configure the training process via `configs/tracking_cfg.yaml`.
+
+```
+> python setup/train.py
+```
+
+### Combined Graph Model
+
+Similarly the combined graph model can be trained by switching to the `combined` branch. Configuration rests in `configs/tracking_cfg_combined.yaml`
+
+
+```
+> python setup/train.py
+```
+
+### Combined Graph Model with joint ReID
+
+This also lies on the `combined` branch. Configuration rests in `configs/tracking_with_joints_bb.yaml`
+
+
+```
+> python setup/train.py
+```
+
+
+
+
+
+
+
+
+
+
+
 # Learning a Neural Solver for Multiple Object Tracking
 
 This the official implementation of our **CVPR 2020 (oral)** paper *Learning a Neural Solver for Multiple Object Tracking* ([Guillem Brasó](https://dvl.in.tum.de/team/braso/), [Laura Leal-Taixe](https://dvl.in.tum.de/team/lealtaixe/))  

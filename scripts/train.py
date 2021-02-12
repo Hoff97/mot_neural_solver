@@ -20,7 +20,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 # from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 
 SETTINGS.CONFIG.READ_ONLY_CONFIG = False
-CONFIG_FILE = "configs/tracking_cfg_combined_2.yaml"
+CONFIG_FILE = "configs/tracking_cfg_combined.yaml"
 
 ex = Experiment()
 ex.add_config(CONFIG_FILE)
