@@ -2,7 +2,7 @@
 
 ## General Setup
 
-For the general setup (data download, ReID weights etc.), please refer to the original MOT Neural solver ([here](Learning-a-Neural-Solver-for-Multiple-Object-Tracking)).
+For the general setup (data download, ReID weights etc.), please refer to the original MOT Neural solver ([here](#Learning-a-Neural-Solver-for-Multiple-Object-Tracking)).
 
 ## Setup
 
