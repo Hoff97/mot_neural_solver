@@ -1,12 +1,12 @@
 ckpt_path: trained_models/graph_nets/mot_mpnet_epoch_006.ckpt
 train_params:
-  batch_size: 32 # default: 8
-  num_epochs: 200
+  batch_size: 8 # default: 8
+  num_epochs: 30
   optimizer:
     type: Adam
     args:
-      lr: 0.003
-      weight_decay: 0.001 # default: 0.0001
+      lr: 0.001
+      weight_decay: 0.0001 # default: 0.0001
   loss:
     type: BCE
 
@@ -17,7 +17,7 @@ train_params:
       gamma: 0.5
 
   num_workers: 6 # Used for dataloaders
-  save_every_epoch: False # Determines if every checkpoint will be saved for every epoch
+  save_every_epoch: True # Determines if every checkpoint will be saved for every epoch
   save_epoch_start: 1 # If the arg above is set to True, determines the first epoch after which we start saving ckpts
   tensorboard: True
 
